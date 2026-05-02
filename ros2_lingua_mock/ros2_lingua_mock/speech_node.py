@@ -64,7 +64,8 @@ class MockSpeechNode(LinguaMixin, Node):
             ],
             preconditions=[],
             postconditions=[],
-            metadata={"category": "speech"},
+            metadata={},
+            tags=["speech", "social"],
         ))
 
         self._log("MockSpeechNode ready.")

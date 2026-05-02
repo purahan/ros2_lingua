@@ -13,6 +13,38 @@ from typing import Any, Dict, List, Optional
 import json
 
 
+# ------------------------------------------------------------------
+# Standard capability tags
+# ------------------------------------------------------------------
+# These are the recommended tag values for common robot domains.
+# Using these ensures consistent filtering across different robots.
+# You can also define your own tags freely — these are just conventions.
+
+class Tags:
+    """Standard tag constants for capability categories."""
+
+    # Motion / locomotion
+    LOCOMOTION   = "locomotion"   # moving the robot base (navigate, drive, walk)
+    MANIPULATION = "manipulation" # arm, gripper, pick/place
+    BALANCE      = "balance"      # stabilization, posture control
+
+    # Perception
+    PERCEPTION   = "perception"   # cameras, lidar, object detection
+    MAPPING      = "mapping"      # SLAM, map building, localization
+
+    # Interaction
+    SPEECH       = "speech"       # TTS, STT, voice I/O
+    SOCIAL       = "social"       # gestures, expressions, HRI
+
+    # System
+    SYSTEM       = "system"       # power, mode switching, diagnostics
+    SAFETY       = "safety"       # e-stop, collision avoidance
+
+    # Domain-specific (add your own as needed)
+    NAVIGATION   = "navigation"   # alias for locomotion in mobile robot contexts
+    INSPECTION   = "inspection"   # for ROVs, drones, industrial robots
+
+
 @dataclass
 class CapabilityParameter:
     """
@@ -97,6 +129,12 @@ class Capability:
     # e.g. {"body_part": "left_arm", "max_payload_kg": 1.5}
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    # --- Tags ---
+    # Free-form labels for filtering and categorization.
+    # Use the Tags constants for standard categories, or define your own.
+    # e.g. tags=["locomotion", "outdoor"] or tags=[Tags.MANIPULATION]
+    tags: List[str] = field(default_factory=list)
+
     def validate(self) -> None:
         """Raises ValueError if the capability definition is malformed."""
         if not self.name:
@@ -122,6 +160,7 @@ class Capability:
             "preconditions": self.preconditions,
             "postconditions": self.postconditions,
             "metadata": self.metadata,
+            "tags": self.tags,
         }
 
     def to_json(self) -> str:
@@ -138,6 +177,7 @@ class Capability:
             preconditions=data.get("preconditions", []),
             postconditions=data.get("postconditions", []),
             metadata=data.get("metadata", {}),
+            tags=data.get("tags", []),
         )
 
     @classmethod
@@ -162,4 +202,6 @@ class Capability:
             lines.append(f"  requires: {', '.join(self.preconditions)}")
         if self.postconditions:
             lines.append(f"  produces: {', '.join(self.postconditions)}")
+        if self.tags:
+            lines.append(f"  tags: {', '.join(self.tags)}")
         return "\n".join(lines)

@@ -79,7 +79,8 @@ class MockBalanceNode(LinguaMixin, Node):
             parameters=[],
             preconditions=[],
             postconditions=["robot_is_balanced"],
-            metadata={"category": "balance", "estimated_duration_sec": 2.0},
+            metadata={"estimated_duration_sec": 2.0},
+            tags=["balance"],
         ))
 
         self._log("MockBalanceNode ready. Robot starts UNSTABILIZED.")

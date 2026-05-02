@@ -21,7 +21,7 @@ Public API:
     )
 """
 
-from .schema import Capability, CapabilityParameter
+from .schema import Capability, CapabilityParameter, Tags
 from .registry import CapabilityRegistry
 from .grounding import GroundingEngine, ActionPlan, ActionStep, LLMBackend
 from .backends import OpenAIBackend, AnthropicBackend, OllamaBackend, MockBackend
@@ -32,6 +32,7 @@ __author__ = "ros2_lingua contributors"
 __all__ = [
     "Capability",
     "CapabilityParameter",
+    "Tags",
     "CapabilityRegistry",
     "GroundingEngine",
     "ActionPlan",

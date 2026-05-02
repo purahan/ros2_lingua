@@ -11,7 +11,7 @@ It also handles:
 """
 
 from typing import Dict, List, Optional, Set
-from .schema import Capability
+from .schema import Capability, Tags
 
 
 class CapabilityRegistry:
@@ -73,6 +73,54 @@ class CapabilityRegistry:
 
     def names(self) -> List[str]:
         return list(self._capabilities.keys())
+
+    def get_by_tag(self, tag: str) -> List[Capability]:
+        """
+        Return all capabilities that include the given tag.
+
+        Example:
+            locomotion_caps = registry.get_by_tag(Tags.LOCOMOTION)
+            manipulation_caps = registry.get_by_tag("manipulation")
+        """
+        return [c for c in self._capabilities.values() if tag in c.tags]
+
+    def get_by_tags(self, tags: List[str], match: str = "any") -> List[Capability]:
+        """
+        Return capabilities matching the given tags.
+
+        Args:
+            tags: List of tags to filter by
+            match: "any" returns capabilities matching at least one tag (OR logic)
+                   "all" returns capabilities matching every tag (AND logic)
+
+        Example:
+            # Capabilities tagged as both locomotion AND outdoor
+            caps = registry.get_by_tags(["locomotion", "outdoor"], match="all")
+
+            # Capabilities tagged as either manipulation OR speech
+            caps = registry.get_by_tags(["manipulation", "speech"], match="any")
+        """
+        if match == "all":
+            return [
+                c for c in self._capabilities.values()
+                if all(t in c.tags for t in tags)
+            ]
+        else:  # "any"
+            return [
+                c for c in self._capabilities.values()
+                if any(t in c.tags for t in tags)
+            ]
+
+    def get_all_tags(self) -> List[str]:
+        """Return a sorted list of all unique tags currently in the registry."""
+        all_tags: set = set()
+        for cap in self._capabilities.values():
+            all_tags.update(cap.tags)
+        return sorted(all_tags)
+
+    def get_untagged(self) -> List[Capability]:
+        """Return all capabilities that have no tags assigned."""
+        return [c for c in self._capabilities.values() if not c.tags]
 
     # ------------------------------------------------------------------
     # State management
@@ -197,18 +245,42 @@ class CapabilityRegistry:
     # LLM context generation
     # ------------------------------------------------------------------
 
-    def to_llm_context(self) -> str:
+    def to_llm_context(self, tags: Optional[List[str]] = None) -> str:
         """
-        Returns a formatted string describing all registered capabilities,
+        Returns a formatted string describing registered capabilities,
         suitable for injection into an LLM system prompt.
+
+        Args:
+            tags: Optional list of tags to filter by. If provided, only
+                  capabilities matching at least one of these tags are
+                  included. If None, all capabilities are included.
+
+        Example:
+            # Only show locomotion and manipulation capabilities
+            context = registry.to_llm_context(tags=["locomotion", "manipulation"])
         """
         if not self._capabilities:
             return "No capabilities are currently registered."
 
-        lines = ["Available robot capabilities:\n"]
-        for cap in self._capabilities.values():
+        if tags is not None:
+            capabilities = self.get_by_tags(tags, match="any")
+            # Always include untagged capabilities so nothing is accidentally hidden
+            untagged = self.get_untagged()
+            seen = {c.name for c in capabilities}
+            for c in untagged:
+                if c.name not in seen:
+                    capabilities.append(c)
+        else:
+            capabilities = list(self._capabilities.values())
+
+        if not capabilities:
+            return f"No capabilities found matching tags: {tags}"
+
+        tag_note = f" (filtered by tags: {tags})" if tags else ""
+        lines = [f"Available robot capabilities{tag_note}:\n"]
+        for cap in capabilities:
             lines.append(cap.to_llm_description())
-            lines.append("")  # blank line between capabilities
+            lines.append("")
 
         lines.append(f"\nCurrent robot state: {sorted(self._state) or 'none'}")
         return "\n".join(lines)

@@ -161,17 +161,26 @@ class GroundingEngine:
         self._backend = backend
         self._auto_chain = auto_chain
 
-    def ground(self, instruction: str) -> ActionPlan:
+    def ground(self, instruction: str, tag_filter: Optional[List[str]] = None) -> ActionPlan:
         """
         Ground a natural language instruction into an ActionPlan.
 
         Args:
             instruction: Natural language command, e.g. "go to the kitchen"
+            tag_filter: Optional list of tags. If provided, only capabilities
+                        matching these tags are shown to the LLM. Useful for
+                        robots with large capability sets, or for restricting
+                        the action space to a specific domain.
+
+                        Example:
+                            # Only consider locomotion capabilities
+                            plan = engine.ground("go to the table",
+                                                 tag_filter=["locomotion"])
 
         Returns:
             ActionPlan with ordered steps ready for dispatch
         """
-        capability_context = self._registry.to_llm_context()
+        capability_context = self._registry.to_llm_context(tags=tag_filter)
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
             capability_context=capability_context
         )

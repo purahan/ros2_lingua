@@ -121,7 +121,8 @@ class MockManipulationNode(LinguaMixin, Node):
             ],
             preconditions=["robot_at_location", "object_in_view", "arm_is_free"],
             postconditions=["object_in_hand"],
-            metadata={"category": "manipulation", "max_payload_kg": 1.5},
+            metadata={"max_payload_kg": 1.5},
+            tags=["manipulation"],
         ))
 
         self.register_lingua_capability(Capability(
@@ -141,7 +142,8 @@ class MockManipulationNode(LinguaMixin, Node):
             ],
             preconditions=["object_in_hand", "robot_at_location"],
             postconditions=["object_placed", "arm_is_free"],
-            metadata={"category": "manipulation"},
+            metadata={},
+            tags=["manipulation"],
         ))
 
         self.register_lingua_capability(Capability(
@@ -159,7 +161,8 @@ class MockManipulationNode(LinguaMixin, Node):
             ],
             preconditions=["robot_is_balanced", "arm_is_free"],
             postconditions=[],
-            metadata={"category": "manipulation", "social_gesture": True},
+            metadata={"social_gesture": True},
+            tags=["manipulation", "social"],
         ))
 
         self._log("MockManipulationNode ready. Arm is free.")

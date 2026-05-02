@@ -108,7 +108,8 @@ class MockNavigationNode(LinguaMixin, Node):
             ],
             preconditions=["robot_is_balanced"],
             postconditions=["robot_at_location"],
-            metadata={"category": "locomotion"},
+            metadata={},
+            tags=["locomotion", "navigation"],
         ))
 
         self.register_lingua_capability(Capability(
@@ -118,7 +119,8 @@ class MockNavigationNode(LinguaMixin, Node):
             parameters=[],
             preconditions=["robot_is_balanced"],
             postconditions=["robot_at_location"],
-            metadata={"category": "locomotion"},
+            metadata={},
+            tags=["locomotion", "navigation"],
         ))
 
         self._log(f"MockNavigationNode ready. Starting at: {self._current_location}")

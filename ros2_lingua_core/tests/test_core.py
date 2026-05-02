@@ -36,6 +36,7 @@ def basic_capability():
         ],
         preconditions=["robot_is_balanced"],
         postconditions=["robot_at_location"],
+        tags=["locomotion", "navigation"],
     )
 
 
@@ -48,6 +49,7 @@ def stabilize_capability():
         parameters=[],
         preconditions=[],
         postconditions=["robot_is_balanced"],
+        tags=["balance"],
     )
 
 
@@ -148,6 +150,126 @@ class TestCapabilityRegistry:
 # ------------------------------------------------------------------
 # Backward chaining tests
 # ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# Tagging tests
+# ------------------------------------------------------------------
+
+class TestCapabilityTagging:
+    def test_tags_in_schema(self):
+        cap = Capability(
+            name="navigate",
+            description="navigates",
+            ros_action="a/b",
+            tags=["locomotion", "navigation"],
+        )
+        assert "locomotion" in cap.tags
+        assert "navigation" in cap.tags
+
+    def test_tags_serialization_roundtrip(self):
+        cap = Capability(
+            name="navigate",
+            description="navigates",
+            ros_action="a/b",
+            tags=["locomotion", "outdoor"],
+        )
+        restored = Capability.from_json(cap.to_json())
+        assert restored.tags == ["locomotion", "outdoor"]
+
+    def test_tags_default_empty(self):
+        cap = Capability(name="test", description="d", ros_action="a/b")
+        assert cap.tags == []
+
+    def test_get_by_tag(self):
+        r = CapabilityRegistry()
+        r.register(Capability(name="nav", description="d", ros_action="a/b", tags=["locomotion"]))
+        r.register(Capability(name="pick", description="d", ros_action="a/c", tags=["manipulation"]))
+        r.register(Capability(name="say", description="d", ros_service="a/d", tags=["speech"]))
+        loco = r.get_by_tag("locomotion")
+        assert len(loco) == 1
+        assert loco[0].name == "nav"
+
+    def test_get_by_tags_any(self):
+        r = CapabilityRegistry()
+        r.register(Capability(name="nav", description="d", ros_action="a/b", tags=["locomotion"]))
+        r.register(Capability(name="pick", description="d", ros_action="a/c", tags=["manipulation"]))
+        r.register(Capability(name="say", description="d", ros_service="a/d", tags=["speech"]))
+        result = r.get_by_tags(["locomotion", "manipulation"], match="any")
+        names = {c.name for c in result}
+        assert names == {"nav", "pick"}
+
+    def test_get_by_tags_all(self):
+        r = CapabilityRegistry()
+        r.register(Capability(name="wave", description="d", ros_action="a/b",
+                               tags=["manipulation", "social"]))
+        r.register(Capability(name="pick", description="d", ros_action="a/c",
+                               tags=["manipulation"]))
+        result = r.get_by_tags(["manipulation", "social"], match="all")
+        assert len(result) == 1
+        assert result[0].name == "wave"
+
+    def test_get_all_tags(self):
+        r = CapabilityRegistry()
+        r.register(Capability(name="nav", description="d", ros_action="a/b",
+                               tags=["locomotion"]))
+        r.register(Capability(name="pick", description="d", ros_action="a/c",
+                               tags=["manipulation", "social"]))
+        all_tags = r.get_all_tags()
+        assert all_tags == sorted(["locomotion", "manipulation", "social"])
+
+    def test_get_untagged(self):
+        r = CapabilityRegistry()
+        r.register(Capability(name="tagged", description="d", ros_action="a/b",
+                               tags=["locomotion"]))
+        r.register(Capability(name="untagged", description="d", ros_action="a/c"))
+        untagged = r.get_untagged()
+        assert len(untagged) == 1
+        assert untagged[0].name == "untagged"
+
+    def test_llm_context_tag_filter(self):
+        r = CapabilityRegistry()
+        r.register(Capability(name="nav", description="navigates", ros_action="a/b",
+                               tags=["locomotion"]))
+        r.register(Capability(name="pick", description="picks", ros_action="a/c",
+                               tags=["manipulation"]))
+        context = r.to_llm_context(tags=["locomotion"])
+        assert "nav" in context
+        assert "pick" not in context
+
+    def test_llm_context_no_filter_shows_all(self):
+        r = CapabilityRegistry()
+        r.register(Capability(name="nav", description="d", ros_action="a/b",
+                               tags=["locomotion"]))
+        r.register(Capability(name="pick", description="d", ros_action="a/c",
+                               tags=["manipulation"]))
+        context = r.to_llm_context()
+        assert "nav" in context
+        assert "pick" in context
+
+    def test_untagged_always_included_in_filtered_context(self):
+        r = CapabilityRegistry()
+        r.register(Capability(name="nav", description="d", ros_action="a/b",
+                               tags=["locomotion"]))
+        r.register(Capability(name="untagged_cap", description="d", ros_action="a/c"))
+        # Filter by manipulation — nav should be excluded, untagged_cap included
+        context = r.to_llm_context(tags=["manipulation"])
+        assert "nav" not in context
+        assert "untagged_cap" in context
+
+    def test_ground_with_tag_filter(self, registry):
+        import json
+        mock_response = json.dumps({
+            "feasible": True, "reason": "", "steps": [{
+                "capability_name": "navigate_to_location",
+                "parameters": {"location_name": "table"},
+                "rationale": "go",
+            }]
+        })
+        from ros2_lingua_core import GroundingEngine, MockBackend
+        engine = GroundingEngine(registry, MockBackend(mock_response), auto_chain=False)
+        plan = engine.ground("go to table", tag_filter=["locomotion"])
+        assert plan.feasible
+
 
 class TestBackwardChaining:
     def test_chain_with_unsatisfied_precondition(self, registry):

@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>ros2_lingua_mock</name>
+  <version>0.1.0</version>
+  <description>
+    Mock robot nodes for ros2_lingua — simulates navigation, manipulation,
+    balance, and speech for testing and demos without physical hardware.
+  </description>
+  <maintainer email="you@example.com">Your Name</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>example_interfaces</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>ros2_lingua</depend>
+  <depend>ros2_lingua_core</depend>
+  <depend>ros2_lingua_interfaces</depend>
+
+  <test_depend>pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

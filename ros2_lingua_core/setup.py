@@ -1,19 +1,15 @@
 from setuptools import setup, find_packages
+import os
 
 setup(
     name="ros2_lingua_core",
     version="0.1.0",
     packages=find_packages(),
-    install_requires=[
-        # No ROS dependencies — intentionally lean
+    data_files=[
+        ("share/ament_index/resource_index/packages",
+            ["resource/ros2_lingua_core"]),
+        ("share/ros2_lingua_core", ["package.xml"]),
     ],
-    extras_require={
-        "openai": ["openai>=1.0.0"],
-        "anthropic": ["anthropic>=0.20.0"],
-        "ollama": ["ollama>=0.1.0"],
-        "all": ["openai>=1.0.0", "anthropic>=0.20.0", "ollama>=0.1.0"],
-    },
-    author="ros2_lingua contributors",
-    description="ROS-agnostic core for the ros2_lingua LLM-to-action bridge",
-    license="Apache-2.0",
+    install_requires=["setuptools"],
+    zip_safe=True,
 )

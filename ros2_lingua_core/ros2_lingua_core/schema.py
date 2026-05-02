@@ -1,0 +1,165 @@
+"""
+ros2_lingua_core.schema
+-----------------------
+Defines the core data structures for capability advertisement.
+
+A 'Capability' is the fundamental unit of this library — it describes
+ONE thing a ROS 2 node can do, in a structured way that both the
+grounding engine and the LLM can reason about.
+"""
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+import json
+
+
+@dataclass
+class CapabilityParameter:
+    """
+    Describes a single input parameter for a capability.
+
+    Example:
+        CapabilityParameter(
+            name="location_name",
+            type="string",
+            description="Named location to walk to, e.g. 'table', 'door'",
+            required=True
+        )
+    """
+    name: str
+    type: str           # "string" | "float" | "int" | "bool" | "geometry_msgs/Pose" | etc.
+    description: str
+    required: bool = True
+    default: Optional[Any] = None
+
+    def to_dict(self) -> Dict:
+        return {
+            "name": self.name,
+            "type": self.type,
+            "description": self.description,
+            "required": self.required,
+            "default": self.default,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "CapabilityParameter":
+        return cls(
+            name=data["name"],
+            type=data["type"],
+            description=data["description"],
+            required=data.get("required", True),
+            default=data.get("default"),
+        )
+
+
+@dataclass
+class Capability:
+    """
+    Describes one thing a ROS 2 node can do.
+
+    This is the core schema of ros2_lingua. Every node that wants to
+    participate in natural language grounding registers one or more
+    Capability objects with the GroundingEngine.
+
+    The preconditions and postconditions fields are what allow the
+    grounding engine to chain capabilities together automatically.
+
+    Example:
+        Capability(
+            name="navigate_to_location",
+            description="Walks the robot to a named location",
+            ros_action="humanoid/navigate_to_pose",
+            parameters=[...],
+            preconditions=["robot_is_balanced"],
+            postconditions=["robot_at_location"]
+        )
+    """
+
+    # --- Identity ---
+    name: str
+    description: str
+
+    # --- ROS 2 Interface ---
+    # Exactly one of these should be set (action OR service)
+    ros_action: Optional[str] = None
+    ros_service: Optional[str] = None
+
+    # --- What it needs ---
+    parameters: List[CapabilityParameter] = field(default_factory=list)
+
+    # --- State conditions (used for chaining) ---
+    # These are symbolic state tokens, e.g. "robot_is_balanced"
+    preconditions: List[str] = field(default_factory=list)
+    postconditions: List[str] = field(default_factory=list)
+
+    # --- Optional metadata ---
+    # Arbitrary key-value pairs for domain-specific info
+    # e.g. {"body_part": "left_arm", "max_payload_kg": 1.5}
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def validate(self) -> None:
+        """Raises ValueError if the capability definition is malformed."""
+        if not self.name:
+            raise ValueError("Capability must have a name.")
+        if not self.description:
+            raise ValueError(f"Capability '{self.name}' must have a description.")
+        if self.ros_action and self.ros_service:
+            raise ValueError(
+                f"Capability '{self.name}' cannot define both ros_action and ros_service."
+            )
+        if not self.ros_action and not self.ros_service:
+            raise ValueError(
+                f"Capability '{self.name}' must define either ros_action or ros_service."
+            )
+
+    def to_dict(self) -> Dict:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "ros_action": self.ros_action,
+            "ros_service": self.ros_service,
+            "parameters": [p.to_dict() for p in self.parameters],
+            "preconditions": self.preconditions,
+            "postconditions": self.postconditions,
+            "metadata": self.metadata,
+        }
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), indent=2)
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "Capability":
+        return cls(
+            name=data["name"],
+            description=data["description"],
+            ros_action=data.get("ros_action"),
+            ros_service=data.get("ros_service"),
+            parameters=[CapabilityParameter.from_dict(p) for p in data.get("parameters", [])],
+            preconditions=data.get("preconditions", []),
+            postconditions=data.get("postconditions", []),
+            metadata=data.get("metadata", {}),
+        )
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "Capability":
+        return cls.from_dict(json.loads(json_str))
+
+    def to_llm_description(self) -> str:
+        """
+        Returns a compact, human-readable description of this capability
+        formatted for inclusion in an LLM prompt.
+        """
+        lines = [
+            f"- name: {self.name}",
+            f"  description: {self.description}",
+        ]
+        if self.parameters:
+            lines.append("  parameters:")
+            for p in self.parameters:
+                req = "required" if p.required else f"optional (default: {p.default})"
+                lines.append(f"    - {p.name} ({p.type}, {req}): {p.description}")
+        if self.preconditions:
+            lines.append(f"  requires: {', '.join(self.preconditions)}")
+        if self.postconditions:
+            lines.append(f"  produces: {', '.join(self.postconditions)}")
+        return "\n".join(lines)

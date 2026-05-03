@@ -126,6 +126,17 @@ def generate_launch_description():
         )],
     )
 
+    # --- Dashboard ---
+    dashboard_node = TimerAction(
+        period=4.0,
+        actions=[Node(
+            package="ros2_lingua_mock",
+            executable="dashboard_server",
+            name="dashboard_server_node",
+            output="screen",
+        )],
+    )
+
     return LaunchDescription([
         llm_backend_arg,
         llm_model_arg,
@@ -138,5 +149,6 @@ def generate_launch_description():
         manipulation_node,
         speech_node,
         monitor_node,
-        LogInfo(msg="All nodes launched. Send instructions via: ros2 lingua ground 'your instruction'"),
+        dashboard_node,
+        LogInfo(msg="All nodes launched. Dashboard: http://localhost:8080"),
     ])

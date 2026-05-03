@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ros2_lingua — Mission Control</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0c0f;
+    --bg-panel:  #0f1318;
+    --bg-card:   #141920;
+    --bg-hover:  #1a2230;
+    --border:    #1e2a38;
+    --border-hi: #2a3a50;
+    --green:     #00e676;
+    --green-dim: #00c853;
+    --amber:     #ffab00;
+    --amber-dim: #ff8f00;
+    --blue:      #40c4ff;
+    --blue-dim:  #0091ea;
+    --red:       #ff5252;
+    --muted:     #4a5568;
+    --text:      #e2e8f0;
+    --text-dim:  #718096;
+    --text-faint:#2d3748;
+    --mono:      'JetBrains Mono', monospace;
+    --sans:      'DM Sans', sans-serif;
+    --radius:    6px;
+    --radius-lg: 10px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    height: 52px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .conn-status {
+    font-family: var(--mono);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-dim);
+  }
+
+  .conn-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+
+  .conn-dot.connected { background: var(--green); }
+  .conn-dot.error     { background: var(--red); }
+
+  .ts {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+
+  /* ── Main layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 280px 1fr 300px;
+    grid-template-rows: 1fr;
+    flex: 1;
+    overflow: hidden;
+    gap: 0;
+  }
+
+  .panel {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel:last-child { border-right: none; }
+
+  .panel-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+
+  .badge-green  { background: rgba(0,230,118,0.12); color: var(--green); }
+  .badge-amber  { background: rgba(255,171,0,0.12);  color: var(--amber); }
+  .badge-blue   { background: rgba(64,196,255,0.12); color: var(--blue); }
+  .badge-muted  { background: rgba(74,85,104,0.2);   color: var(--text-dim); }
+  .badge-red    { background: rgba(255,82,82,0.12);  color: var(--red); }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  /* ── Capabilities panel ── */
+  .tag-group { margin-bottom: 16px; }
+
+  .tag-group-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    padding: 4px 8px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .tag-group-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .cap-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    cursor: default;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .cap-card:hover {
+    border-color: var(--border-hi);
+    background: var(--bg-hover);
+  }
+
+  .cap-card.active {
+    border-color: var(--amber);
+    background: rgba(255,171,0,0.05);
+  }
+
+  .cap-card.done {
+    border-color: var(--green);
+    background: rgba(0,230,118,0.04);
+  }
+
+  .cap-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+
+  .cap-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.4;
+    margin-bottom: 6px;
+  }
+
+  .cap-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .tag-pill {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 20px;
+    border: 1px solid var(--border-hi);
+    color: var(--text-dim);
+    letter-spacing: 0.3px;
+  }
+
+  /* ── Center panel ── */
+  .center-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .instruction-area {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--bg-panel);
+  }
+
+  .instruction-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: 8px;
+  }
+
+  .instruction-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .instruction-input {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .instruction-input:focus { border-color: var(--blue); }
+  .instruction-input::placeholder { color: var(--muted); }
+
+  .send-btn {
+    background: var(--green);
+    color: #000;
+    border: none;
+    border-radius: var(--radius);
+    padding: 10px 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+
+  .send-btn:hover   { background: #69f0ae; }
+  .send-btn:active  { transform: scale(0.97); }
+  .send-btn:disabled {
+    background: var(--muted);
+    color: var(--text-faint);
+    cursor: not-allowed;
+  }
+
+  /* ── Plan visualization ── */
+  .plan-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .plan-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-faint);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-align: center;
+    gap: 8px;
+  }
+
+  .plan-instruction {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 20px;
+    padding: 10px 14px;
+    background: var(--bg-card);
+    border-left: 3px solid var(--blue);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    font-style: italic;
+  }
+
+  .plan-steps { display: flex; flex-direction: column; gap: 10px; }
+
+  .step-card {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 12px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .step-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--border);
+    transition: background 0.2s;
+  }
+
+  .step-card.pending::before   { background: var(--border); }
+  .step-card.running::before   { background: var(--amber); }
+  .step-card.complete::before  { background: var(--green); }
+  .step-card.failed::before    { background: var(--red); }
+  .step-card.auto::before      { background: var(--blue); }
+
+  .step-card.running {
+    border-color: rgba(255,171,0,0.3);
+    background: rgba(255,171,0,0.04);
+  }
+
+  .step-card.complete {
+    border-color: rgba(0,230,118,0.2);
+    background: rgba(0,230,118,0.03);
+  }
+
+  .step-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-hi);
+    color: var(--text-dim);
+    flex-shrink: 0;
+    margin-top: 1px;
+    transition: all 0.2s;
+  }
+
+  .step-card.running  .step-num { border-color: var(--amber); color: var(--amber); }
+  .step-card.complete .step-num { border-color: var(--green); color: var(--green); background: rgba(0,230,118,0.1); }
+  .step-card.failed   .step-num { border-color: var(--red); color: var(--red); }
+
+  .step-info { flex: 1; min-width: 0; }
+
+  .step-name {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .step-rationale {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.4;
+    margin-bottom: 6px;
+  }
+
+  .step-params {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--blue);
+    background: rgba(64,196,255,0.06);
+    padding: 4px 8px;
+    border-radius: var(--radius);
+    display: inline-block;
+  }
+
+  .step-status {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+
+  .running-indicator {
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+  }
+
+  .running-indicator span {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--amber);
+    animation: blink 1s ease-in-out infinite;
+  }
+
+  .running-indicator span:nth-child(2) { animation-delay: 0.15s; }
+  .running-indicator span:nth-child(3) { animation-delay: 0.3s; }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.2; }
+  }
+
+  /* ── Right panel ── */
+  .state-area {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .state-tokens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .state-token {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-hi);
+    color: var(--text-dim);
+    letter-spacing: 0.3px;
+    transition: all 0.2s;
+  }
+
+  .state-token.active {
+    background: rgba(0,230,118,0.1);
+    border-color: var(--green);
+    color: var(--green);
+  }
+
+  .no-state {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    font-style: italic;
+  }
+
+  /* ── Log ── */
+  .log-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
+  .log-entry {
+    display: flex;
+    gap: 8px;
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.02);
+    opacity: 0;
+    animation: fadeIn 0.2s ease forwards;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateX(-4px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .log-ts  { color: var(--text-faint); flex-shrink: 0; }
+  .log-msg { color: var(--text-dim); word-break: break-word; }
+
+  .log-msg.info     { color: var(--text); }
+  .log-msg.success  { color: var(--green); }
+  .log-msg.warning  { color: var(--amber); }
+  .log-msg.error    { color: var(--red); }
+
+  /* ── Status bar ── */
+  .statusbar {
+    height: 28px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-panel);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 20px;
+    flex-shrink: 0;
+  }
+
+  .sb-item {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-faint);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .sb-item .val { color: var(--text-dim); }
+  .sb-item .val.ok { color: var(--green); }
+  .sb-item .val.warn { color: var(--amber); }
+
+  .sb-spacer { flex: 1; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    ros2_lingua
+    <span style="font-size:11px; color:var(--text-faint); font-weight:400;">mission control</span>
+  </div>
+  <div class="header-right">
+    <div class="conn-status">
+      <div class="conn-dot" id="connDot"></div>
+      <span id="connLabel">connecting...</span>
+    </div>
+    <div class="ts" id="clock"></div>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- Left: Capabilities -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">capabilities</span>
+      <span class="badge badge-muted" id="capCount">0</span>
+    </div>
+    <div class="panel-body" id="capList">
+      <div style="color:var(--text-faint);font-family:var(--mono);font-size:11px;text-align:center;padding:24px 0;">
+        waiting for nodes...
+      </div>
+    </div>
+  </div>
+
+  <!-- Center: Instruction + Plan -->
+  <div class="center-panel">
+    <div class="instruction-area">
+      <div class="instruction-label">natural language instruction</div>
+      <div class="instruction-row">
+        <input
+          class="instruction-input"
+          id="instrInput"
+          type="text"
+          placeholder="go to the table and pick up the bottle..."
+          autocomplete="off"
+        />
+        <button class="send-btn" id="sendBtn" onclick="sendInstruction()">SEND</button>
+      </div>
+    </div>
+
+    <div class="panel-header" style="background:var(--bg-panel);">
+      <span class="panel-title">execution plan</span>
+      <span class="badge" id="planStatus" style="display:none;"></span>
+    </div>
+
+    <div class="plan-area" id="planArea">
+      <div class="plan-empty">
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+          <rect x="8" y="8" width="24" height="4" rx="2" fill="currentColor" opacity="0.2"/>
+          <rect x="8" y="17" width="18" height="4" rx="2" fill="currentColor" opacity="0.15"/>
+          <rect x="8" y="26" width="21" height="4" rx="2" fill="currentColor" opacity="0.1"/>
+        </svg>
+        <span>send an instruction to generate a plan</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: State + Log -->
+  <div class="panel" style="border-right:none; border-left:1px solid var(--border);">
+    <div class="panel-header">
+      <span class="panel-title">robot state</span>
+      <span class="badge badge-green" id="stateCount">0 tokens</span>
+    </div>
+    <div class="state-area">
+      <div class="state-tokens" id="stateTokens">
+        <span class="no-state">no active state tokens</span>
+      </div>
+    </div>
+
+    <div class="panel-header" style="border-top:1px solid var(--border);">
+      <span class="panel-title">activity log</span>
+      <span class="badge badge-muted" id="logCount">0</span>
+    </div>
+    <div class="log-area" id="logArea"></div>
+  </div>
+
+</div>
+
+<div class="statusbar">
+  <div class="sb-item">ros2_lingua <span class="val">v0.1.0</span></div>
+  <div class="sb-item">backend <span class="val ok" id="sbBackend">—</span></div>
+  <div class="sb-item">instructions <span class="val" id="sbInstrCount">0</span></div>
+  <div class="sb-item">steps run <span class="val" id="sbStepsCount">0</span></div>
+  <div class="sb-spacer"></div>
+  <div class="sb-item">rosbridge <span class="val" id="sbRosbridge">ws://localhost:9090</span></div>
+</div>
+
+<script>
+const ROSBRIDGE_URL = 'ws://localhost:9090';
+
+let ros = null;
+let connected = false;
+let capabilities = {};
+let stateTokens = new Set();
+let currentPlan = null;
+let logCount = 0;
+let instrCount = 0;
+let stepsCount = 0;
+
+function connect() {
+  try {
+    ros = new WebSocket(ROSBRIDGE_URL);
+    ros.onopen    = onConnected;
+    ros.onclose   = onDisconnected;
+    ros.onerror   = onError;
+    ros.onmessage = onMessage;
+  } catch(e) {
+    setConnStatus(false, 'failed to connect');
+  }
+}
+
+function onConnected() {
+  connected = true;
+  setConnStatus(true, 'connected');
+  addLog('Connected to rosbridge at ' + ROSBRIDGE_URL, 'success');
+  subscribe('/lingua/capabilities',  'std_msgs/String',  handleCapabilities);
+  subscribe('/lingua/current_plan',  'std_msgs/String',  handlePlan);
+  subscribe('/mock/robot_log',       'std_msgs/String',  handleRobotLog);
+  subscribe('/mock/balance_status',  'std_msgs/Bool',    handleBalance);
+  subscribe('/mock/current_location','std_msgs/String',  handleLocation);
+}
+
+function onDisconnected() {
+  connected = false;
+  setConnStatus(false, 'disconnected');
+  addLog('Lost connection to rosbridge. Retrying in 3s...', 'warning');
+  setTimeout(connect, 3000);
+}
+
+function onError(e) {
+  setConnStatus(false, 'error');
+  addLog('WebSocket error — is rosbridge running? (ros2 launch rosbridge_server rosbridge_websocket_launch.xml)', 'error');
+}
+
+const listeners = {};
+
+function onMessage(evt) {
+  try {
+    const msg = JSON.parse(evt.data);
+    if (msg.op === 'publish' && listeners[msg.topic]) {
+      listeners[msg.topic](msg.msg);
+    }
+  } catch(e) {}
+}
+
+function subscribe(topic, type, cb) {
+  listeners[topic] = cb;
+  if (ros && ros.readyState === 1) {
+    ros.send(JSON.stringify({ op: 'subscribe', topic, type }));
+  }
+}
+
+function callService(service, type, args, cb) {
+  if (!ros || ros.readyState !== 1) {
+    addLog('Not connected to rosbridge', 'error');
+    return;
+  }
+  const id = 'call_' + Date.now();
+  const handler = (evt) => {
+    try {
+      const msg = JSON.parse(evt.data);
+      if (msg.id === id && msg.op === 'service_response') {
+        ros.removeEventListener('message', handler);
+        cb && cb(msg.values);
+      }
+    } catch(e) {}
+  };
+  ros.addEventListener('message', handler);
+  ros.send(JSON.stringify({ op: 'call_service', id, service, type, args }));
+}
+
+function setConnStatus(ok, label) {
+  document.getElementById('connDot').className = 'conn-dot ' + (ok ? 'connected' : 'error');
+  document.getElementById('connLabel').textContent = label;
+}
+
+function handleCapabilities(msg) {
+  try {
+    const caps = JSON.parse(msg.data);
+    capabilities = {};
+    caps.forEach(c => capabilities[c.name] = c);
+    renderCapabilities();
+    document.getElementById('capCount').textContent = caps.length;
+  } catch(e) {}
+}
+
+function handlePlan(msg) {
+  try {
+    currentPlan = JSON.parse(msg.data);
+    renderPlan(currentPlan);
+    instrCount++;
+    document.getElementById('sbInstrCount').textContent = instrCount;
+  } catch(e) {}
+}
+
+function handleRobotLog(msg) {
+  addLog(msg.data);
+}
+
+function handleBalance(msg) {
+  if (msg.data) {
+    stateTokens.add('robot_is_balanced');
+  } else {
+    stateTokens.delete('robot_is_balanced');
+  }
+  renderState();
+}
+
+function handleLocation(msg) {
+  stateTokens.forEach(t => { if (t.startsWith('at_')) stateTokens.delete(t); });
+  if (msg.data && msg.data !== 'unknown') {
+    stateTokens.add('robot_at_location');
+  }
+  renderState();
+}
+
+function renderCapabilities() {
+  const el = document.getElementById('capList');
+  const caps = Object.values(capabilities);
+
+  if (caps.length === 0) {
+    el.innerHTML = '<div style="color:var(--text-faint);font-family:var(--mono);font-size:11px;text-align:center;padding:24px 0;">waiting for nodes...</div>';
+    return;
+  }
+
+  const groups = {};
+  caps.forEach(c => {
+    const tag = (c.tags && c.tags[0]) || 'other';
+    if (!groups[tag]) groups[tag] = [];
+    groups[tag].push(c);
+  });
+
+  const activeCap = currentPlan && currentPlan.steps
+    ? currentPlan.steps.find(s => s._status === 'running')?.capability_name
+    : null;
+  const doneCaps = currentPlan && currentPlan.steps
+    ? new Set(currentPlan.steps.filter(s => s._status === 'complete').map(s => s.capability_name))
+    : new Set();
+
+  el.innerHTML = Object.entries(groups).map(([tag, tagCaps]) => `
+    <div class="tag-group">
+      <div class="tag-group-label">${tag}</div>
+      ${tagCaps.map(c => `
+        <div class="cap-card ${c.name === activeCap ? 'active' : doneCaps.has(c.name) ? 'done' : ''}">
+          <div class="cap-name">${c.name}</div>
+          <div class="cap-desc">${c.description.length > 80 ? c.description.slice(0,80)+'…' : c.description}</div>
+          <div class="cap-tags">
+            ${(c.tags || []).map(t => `<span class="tag-pill">${t}</span>`).join('')}
+            ${c.preconditions && c.preconditions.length ? `<span class="tag-pill" style="color:var(--amber-dim);border-color:rgba(255,171,0,0.3);">req: ${c.preconditions.join(', ')}</span>` : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+}
+
+function renderPlan(plan) {
+  const el = document.getElementById('planArea');
+  const statusEl = document.getElementById('planStatus');
+
+  if (!plan || !plan.steps || plan.steps.length === 0) {
+    statusEl.style.display = 'none';
+    if (!plan.feasible) {
+      el.innerHTML = `
+        <div style="padding:20px;">
+          <div style="color:var(--red);font-family:var(--mono);font-size:12px;margin-bottom:8px;">NOT FEASIBLE</div>
+          <div style="color:var(--text-dim);font-size:13px;">${plan.reason || 'Unknown reason'}</div>
+        </div>`;
+    }
+    return;
+  }
+
+  statusEl.style.display = 'inline-flex';
+  statusEl.className = 'badge badge-amber';
+  statusEl.textContent = 'executing';
+
+  el.innerHTML = `
+    <div class="plan-instruction">"${plan.original_instruction}"</div>
+    <div class="plan-steps" id="planSteps">
+      ${plan.steps.map((step, i) => {
+        const isAuto = step.rationale && step.rationale.includes('Auto-inserted');
+        const params = Object.entries(step.parameters || {})
+          .map(([k,v]) => `${k}: "${v}"`)
+          .join('  ');
+        return `
+          <div class="step-card ${isAuto ? 'auto' : 'pending'}" id="step-${i}">
+            <div class="step-num">${i+1}</div>
+            <div class="step-info">
+              <div class="step-name">
+                ${step.capability_name}
+                ${isAuto ? '<span class="badge badge-blue" style="font-size:9px;">auto-chained</span>' : ''}
+              </div>
+              ${step.rationale && !step.rationale.includes('Auto-inserted')
+                ? `<div class="step-rationale">${step.rationale}</div>`
+                : ''}
+              ${params
+                ? `<div class="step-params">${params}</div>`
+                : ''}
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
+
+  animatePlanSteps(plan.steps.length);
+}
+
+function animatePlanSteps(total) {
+  let i = 0;
+  function runStep() {
+    if (i >= total) {
+      const statusEl = document.getElementById('planStatus');
+      if (statusEl) {
+        statusEl.className = 'badge badge-green';
+        statusEl.textContent = 'complete';
+      }
+      return;
+    }
+    const prevCard = i > 0 ? document.getElementById('step-' + (i-1)) : null;
+    if (prevCard) {
+      prevCard.classList.remove('running');
+      prevCard.classList.add('complete');
+      stepsCount++;
+      document.getElementById('sbStepsCount').textContent = stepsCount;
+    }
+    const card = document.getElementById('step-' + i);
+    if (card) {
+      card.classList.remove('pending', 'auto');
+      card.classList.add('running');
+      const numEl = card.querySelector('.step-num');
+      if (numEl) {
+        numEl.innerHTML = `<div class="running-indicator"><span></span><span></span><span></span></div>`;
+      }
+    }
+    renderCapabilities();
+    i++;
+    setTimeout(runStep, 2200 + Math.random() * 800);
+  }
+  setTimeout(runStep, 400);
+}
+
+function renderState() {
+  const el = document.getElementById('stateTokens');
+  const count = stateTokens.size;
+  document.getElementById('stateCount').textContent = count + ' token' + (count !== 1 ? 's' : '');
+
+  if (count === 0) {
+    el.innerHTML = '<span class="no-state">no active state tokens</span>';
+    return;
+  }
+  el.innerHTML = Array.from(stateTokens).map(t =>
+    `<span class="state-token active">${t}</span>`
+  ).join('');
+}
+
+function addLog(msg, level) {
+  const el = document.getElementById('logArea');
+  const ts = new Date().toTimeString().slice(0,8);
+  logCount++;
+  document.getElementById('logCount').textContent = logCount;
+
+  const msgClass = level || (
+    msg.includes('✅') || msg.includes('ready') || msg.includes('Registered') ? 'success' :
+    msg.includes('❌') || msg.includes('error') || msg.includes('Error') ? 'error' :
+    msg.includes('⚠') || msg.includes('DEMO') || msg.includes('warn') ? 'warning' :
+    'info'
+  );
+
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `
+    <span class="log-ts">${ts}</span>
+    <span class="log-msg ${msgClass}">${msg}</span>`;
+  el.appendChild(entry);
+  el.scrollTop = el.scrollHeight;
+
+  while (el.children.length > 200) el.removeChild(el.firstChild);
+}
+
+function sendInstruction() {
+  const input = document.getElementById('instrInput');
+  const instruction = input.value.trim();
+  if (!instruction) return;
+  if (!connected) {
+    addLog('Not connected to rosbridge', 'error');
+    return;
+  }
+
+  addLog(`Sending: "${instruction}"`, 'info');
+  document.getElementById('sendBtn').disabled = true;
+
+  callService(
+    '/lingua/ground',
+    'ros2_lingua_interfaces/srv/GroundInstruction',
+    { instruction },
+    (result) => {
+      document.getElementById('sendBtn').disabled = false;
+      if (result && result.success) {
+        addLog('Plan generated successfully', 'success');
+        try {
+          const plan = JSON.parse(result.plan_json);
+          renderPlan(plan);
+        } catch(e) {}
+      } else {
+        addLog('Grounding failed: ' + (result ? result.message : 'no response'), 'error');
+        document.getElementById('sendBtn').disabled = false;
+      }
+    }
+  );
+
+  input.value = '';
+}
+
+document.getElementById('instrInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendInstruction();
+});
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8);
+}
+
+setInterval(updateClock, 1000);
+updateClock();
+connect();
+
+addLog('ros2_lingua dashboard initializing...', 'info');
+addLog('Connecting to rosbridge at ' + ROSBRIDGE_URL + '...', 'info');
+</script>
+</body>
+</html>

@@ -16,11 +16,20 @@ implements the LLMBackend protocol (OpenAI, Anthropic, Ollama, etc.)
 """
 
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol
 
 from .registry import CapabilityRegistry
 from .schema import Capability
+from .errors import (
+    LLMBackendError,
+    LLMTimeoutError,
+    HallucinationError,
+    GroundingError,
+)
+
+logger = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------------
@@ -149,6 +158,9 @@ class GroundingEngine:
         registry: CapabilityRegistry,
         backend: LLMBackend,
         auto_chain: bool = True,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+        retry_backoff: float = 2.0,
     ):
         """
         Args:
@@ -156,47 +168,111 @@ class GroundingEngine:
             backend: Any object implementing the LLMBackend protocol
             auto_chain: If True, automatically resolve and prepend prerequisite
                         capabilities before the LLM-chosen ones. Default True.
+            max_retries: Maximum number of LLM call attempts before giving up.
+                         Default 3. Set to 1 to disable retries.
+            retry_delay: Initial delay in seconds between retry attempts.
+                         Default 1.0s.
+            retry_backoff: Multiplier applied to retry_delay after each attempt.
+                           Default 2.0 (exponential backoff).
+                           e.g. delays will be: 1s, 2s, 4s
         """
         self._registry = registry
         self._backend = backend
         self._auto_chain = auto_chain
+        self._max_retries = max_retries
+        self._retry_delay = retry_delay
+        self._retry_backoff = retry_backoff
 
     def ground(self, instruction: str, tag_filter: Optional[List[str]] = None) -> ActionPlan:
         """
         Ground a natural language instruction into an ActionPlan.
 
+        Automatically retries on transient backend failures (connection issues,
+        timeouts, rate limits) with exponential backoff. Non-retryable errors
+        (bad API key, empty registry, hallucinated capabilities) fail immediately.
+
         Args:
             instruction: Natural language command, e.g. "go to the kitchen"
-            tag_filter: Optional list of tags. If provided, only capabilities
-                        matching these tags are shown to the LLM. Useful for
-                        robots with large capability sets, or for restricting
-                        the action space to a specific domain.
-
-                        Example:
-                            # Only consider locomotion capabilities
-                            plan = engine.ground("go to the table",
-                                                 tag_filter=["locomotion"])
+            tag_filter: Optional list of tags to filter the capability context.
 
         Returns:
             ActionPlan with ordered steps ready for dispatch
+
+        Raises:
+            EmptyRegistryError: If no capabilities are registered
+            BackendAuthError: If API key is invalid (not retried)
+            MaxRetriesExceededError: If all retry attempts fail
         """
+        if not self._registry.get_all():
+            return ActionPlan(
+                steps=[],
+                original_instruction=instruction,
+                feasible=False,
+                reason="No capabilities are registered. Nodes must register before grounding.",
+            )
+
         capability_context = self._registry.to_llm_context(tags=tag_filter)
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
             capability_context=capability_context
         )
-
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": instruction},
         ]
 
-        raw_response = self._backend.complete(messages)
-        plan = self._parse_response(raw_response, instruction)
+        last_error = None
+        delay = self._retry_delay
 
-        if plan.feasible and self._auto_chain:
-            plan = self._apply_auto_chaining(plan, instruction)
+        for attempt in range(1, self._max_retries + 1):
+            try:
+                raw_response = self._backend.complete(messages)
+                plan = self._parse_response(raw_response, instruction)
 
-        return plan
+                if plan.feasible and self._auto_chain:
+                    plan = self._apply_auto_chaining(plan, instruction)
+
+                return plan
+
+            except LLMTimeoutError as e:
+                last_error = e
+                if attempt < self._max_retries:
+                    logger.warning(
+                        f"LLM timeout on attempt {attempt}/{self._max_retries}. "
+                        f"Retrying in {delay:.1f}s..."
+                    )
+                    import time; time.sleep(delay)
+                    delay *= self._retry_backoff
+
+            except LLMBackendError as e:
+                last_error = e
+                if attempt < self._max_retries:
+                    logger.warning(
+                        f"LLM backend error on attempt {attempt}/{self._max_retries}: {e}. "
+                        f"Retrying in {delay:.1f}s..."
+                    )
+                    import time; time.sleep(delay)
+                    delay *= self._retry_backoff
+                else:
+                    logger.error(f"LLM backend failed after {self._max_retries} attempts: {e}")
+
+            except Exception as e:
+                logger.error(f"Unexpected grounding error: {e}")
+                return ActionPlan(
+                    steps=[],
+                    original_instruction=instruction,
+                    feasible=False,
+                    reason=f"Unexpected error: {e}",
+                )
+
+        return ActionPlan(
+            steps=[],
+            original_instruction=instruction,
+            feasible=False,
+            reason=(
+                f"Grounding failed after {self._max_retries} attempts. "
+                f"Last error: {last_error}"
+            ),
+        )
 
     def _parse_response(self, raw: str, instruction: str) -> ActionPlan:
         """Parse the LLM JSON response into an ActionPlan."""

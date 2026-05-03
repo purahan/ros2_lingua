@@ -375,3 +375,208 @@ class TestGroundingEngine:
         plan = engine.ground("anything")
         assert plan.feasible is False
         assert "JSON" in plan.reason
+
+
+# ------------------------------------------------------------------
+# Robustness tests
+# ------------------------------------------------------------------
+
+class TestRobustness:
+
+    def _nav_cap(self):
+        return Capability(
+            name="navigate",
+            description="navigates",
+            ros_action="a/nav",
+            parameters=[CapabilityParameter("loc", "string", "where")],
+            tags=["locomotion"],
+        )
+
+    def _mock_plan(self, cap_name="navigate", loc="table"):
+        import json
+        return json.dumps({
+            "feasible": True, "reason": "", "steps": [{
+                "capability_name": cap_name,
+                "parameters": {"loc": loc},
+                "rationale": "go",
+            }]
+        })
+
+    def test_empty_registry_raises(self):
+        from ros2_lingua_core.errors import EmptyRegistryError
+        r = CapabilityRegistry()
+        engine = GroundingEngine(r, MockBackend(self._mock_plan()), auto_chain=False)
+        with pytest.raises(EmptyRegistryError):
+            engine.ground("go to table")
+
+    def test_retry_on_connection_error(self):
+        """Backend fails twice then succeeds — engine should retry and return plan."""
+        from ros2_lingua_core.errors import BackendConnectionError
+        r = CapabilityRegistry()
+        r.register(self._nav_cap())
+        backend = MockBackend(
+            self._mock_plan(),
+            fail_times=2,
+            fail_with=BackendConnectionError("Simulated"),
+        )
+        engine = GroundingEngine(r, backend, auto_chain=False, max_retries=3, retry_delay=0.0)
+        plan = engine.ground("go to table")
+        assert plan.feasible
+        assert plan.steps[0].capability_name == "navigate"
+
+    def test_auth_error_not_retried(self):
+        """Auth errors should raise immediately without retrying."""
+        from ros2_lingua_core.errors import BackendAuthError, MaxRetriesExceededError
+        r = CapabilityRegistry()
+        r.register(self._nav_cap())
+        backend = MockBackend(
+            self._mock_plan(),
+            fail_times=99,
+            fail_with=BackendAuthError("Bad API key"),
+        )
+        engine = GroundingEngine(r, backend, auto_chain=False, max_retries=3, retry_delay=0.0)
+        with pytest.raises(BackendAuthError):
+            engine.ground("go to table")
+
+    def test_max_retries_exceeded_raises(self):
+        """If all retries fail, MaxRetriesExceededError should be raised."""
+        from ros2_lingua_core.errors import BackendConnectionError, MaxRetriesExceededError
+        r = CapabilityRegistry()
+        r.register(self._nav_cap())
+        backend = MockBackend(
+            self._mock_plan(),
+            fail_times=99,
+            fail_with=BackendConnectionError("Always fails"),
+        )
+        engine = GroundingEngine(r, backend, auto_chain=False, max_retries=2, retry_delay=0.0)
+        with pytest.raises(MaxRetriesExceededError) as exc_info:
+            engine.ground("go to table")
+        assert exc_info.value.last_error is not None
+
+    def test_mock_backend_fail_then_succeed(self):
+        """MockBackend fail_times works correctly."""
+        from ros2_lingua_core.errors import BackendConnectionError
+        backend = MockBackend("response", fail_times=2,
+                              fail_with=BackendConnectionError("x"))
+        calls = 0
+        errors = 0
+        for _ in range(3):
+            try:
+                result = backend.complete([])
+                calls += 1
+            except BackendConnectionError:
+                errors += 1
+        assert errors == 2
+        assert calls == 1
+
+    def test_typed_errors_hierarchy(self):
+        """All backend errors should be catchable as BackendError."""
+        from ros2_lingua_core.errors import (
+            BackendError, BackendConnectionError, BackendAuthError,
+            BackendTimeoutError, BackendRateLimitError,
+        )
+        for exc_class in [BackendConnectionError, BackendAuthError,
+                          BackendTimeoutError, BackendRateLimitError]:
+            instance = exc_class("test")
+            assert isinstance(instance, BackendError)
+
+    def test_grounding_error_hierarchy(self):
+        """Grounding errors should be catchable as GroundingError."""
+        from ros2_lingua_core.errors import (
+            GroundingError, EmptyRegistryError, MaxRetriesExceededError,
+        )
+        assert isinstance(EmptyRegistryError("test"), GroundingError)
+        assert isinstance(MaxRetriesExceededError("test"), GroundingError)
+
+
+# ------------------------------------------------------------------
+# Robustness tests
+# ------------------------------------------------------------------
+
+class TestRobustness:
+    def test_retry_config_defaults(self):
+        from ros2_lingua_core import RetryConfig
+        r = RetryConfig()
+        assert r.max_retries == 3
+        assert r.base_delay_sec == 1.0
+        assert r.backoff_factor == 2.0
+
+    def test_retry_config_no_retry(self):
+        from ros2_lingua_core import RetryConfig
+        r = RetryConfig.no_retry()
+        assert r.max_retries == 0
+
+    def test_mock_backend_failing_then_succeeds(self):
+        import json
+        from ros2_lingua_core import MockBackend, LLMTimeoutError
+        success_response = json.dumps({
+            "feasible": True, "reason": "", "steps": []
+        })
+        backend = MockBackend.failing(
+            LLMTimeoutError("timed out"),
+            retries_before_success=2,
+            success_response=success_response,
+        )
+        # First 2 calls raise, 3rd succeeds
+        for _ in range(2):
+            try:
+                backend.complete([])
+            except LLMTimeoutError:
+                pass
+        result = backend.complete([])
+        assert "feasible" in result
+
+    def test_empty_registry_returns_infeasible(self):
+        from ros2_lingua_core import CapabilityRegistry, GroundingEngine, MockBackend
+        import json
+        r = CapabilityRegistry()
+        engine = GroundingEngine(r, MockBackend("{}"), auto_chain=False)
+        plan = engine.ground("do something")
+        assert not plan.feasible
+        assert "registered" in plan.reason.lower()
+
+    def test_error_hierarchy(self):
+        from ros2_lingua_core import (
+            LinguaError, LLMBackendError, LLMTimeoutError,
+            LLMRateLimitError, GroundingError, HallucinationError,
+            PlanningError, UnsatisfiablePreconditionError,
+        )
+        assert issubclass(LLMBackendError, LinguaError)
+        assert issubclass(LLMTimeoutError, LLMBackendError)
+        assert issubclass(LLMRateLimitError, LLMBackendError)
+        assert issubclass(HallucinationError, GroundingError)
+        assert issubclass(GroundingError, LinguaError)
+        assert issubclass(UnsatisfiablePreconditionError, PlanningError)
+        assert issubclass(PlanningError, LinguaError)
+
+    def test_step_timeout_error_message(self):
+        from ros2_lingua_core import StepTimeoutError
+        e = StepTimeoutError("navigate_to_location", 10.0)
+        assert "navigate_to_location" in str(e)
+        assert "10.0" in str(e)
+
+    def test_hallucination_error_message(self):
+        from ros2_lingua_core import HallucinationError
+        e = HallucinationError("ghost_capability")
+        assert "ghost_capability" in str(e)
+        assert "hallucinated" in str(e).lower()
+
+    def test_unsatisfiable_precondition_error_message(self):
+        from ros2_lingua_core import UnsatisfiablePreconditionError
+        e = UnsatisfiablePreconditionError("robot_is_balanced", "navigate_to_location")
+        assert "robot_is_balanced" in str(e)
+        assert "navigate_to_location" in str(e)
+
+    def test_grounding_engine_retry_params(self):
+        from ros2_lingua_core import CapabilityRegistry, GroundingEngine, MockBackend, Capability
+        import json
+        r = CapabilityRegistry()
+        r.register(Capability(name="nav", description="d", ros_action="a/b"))
+        mock = MockBackend(json.dumps({"feasible": True, "reason": "", "steps": [
+            {"capability_name": "nav", "parameters": {}, "rationale": "go"}
+        ]}))
+        # Verify max_retries and retry params are accepted
+        engine = GroundingEngine(r, mock, auto_chain=False,
+                                  max_retries=5, retry_delay=0.1, retry_backoff=1.5)
+        plan = engine.ground("do nav")
+        assert plan.feasible

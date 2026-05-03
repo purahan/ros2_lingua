@@ -12,19 +12,19 @@
 ```
 User: "go pick up the bottle from the table"
 
-        ┌─────────────────────────────┐
+        ┌──────────────────────────────┐
         │       Grounding Engine       │
         │   (+ Backward Chain Planner) │
-        └─────────────────────────────┘
+        └──────────────────────────────┘
                        ↓
    Step 1 → stabilize_robot          [auto-chained prerequisite]
    Step 2 → navigate_to_location     { location_name: "table" }
    Step 3 → pick_up_object           { object_name: "bottle" }
                        ↓
-        ┌─────────────────────────────┐
+        ┌──────────────────────────────┐
         │        Dispatcher Node       │
         │  ROS 2 Actions  │  Services  │
-        └─────────────────────────────┘
+        └──────────────────────────────┘
 ```
 
 ---

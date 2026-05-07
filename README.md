@@ -7,6 +7,8 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
 [![Tests](https://img.shields.io/badge/Tests-20%20passed-brightgreen)]()
 
+📖 **[Documentation](https://purahan.github.io/ros2_lingua/)**
+
 `ros2_lingua` is a ROS 2 library that bridges the gap between large language models (LLMs) and real robot control. Your nodes declare what they can do through a structured **capability schema**, and the grounding engine automatically translates natural language instructions into validated, dependency-aware execution plans — dispatched over your existing ROS 2 actions and services.
 
 ```

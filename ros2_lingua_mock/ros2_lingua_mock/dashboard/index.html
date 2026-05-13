@@ -1,688 +1,213 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="dark h-full" lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>ros2_lingua — Mission Control</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600&family=Sora:wght@600;700;800&family=Hanken+Grotesk:wght@400;500&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script>
+tailwind.config = {
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        "surface-container-high": "#272a2c",
+        "outline-variant": "#434656",
+        "background": "#101415",
+        "surface-dim": "#101415",
+        "surface-container-lowest": "#0b0f10",
+        "surface-container-low": "#191c1e",
+        "primary-fixed-dim": "#b7c4ff",
+        "on-surface-variant": "#c3c5d9",
+        "surface-variant": "#323537",
+        "outline": "#8d90a2",
+        "on-surface": "#e0e3e5",
+        "primary": "#b7c4ff",
+        "surface": "#101415",
+        "inverse-primary": "#004ced",
+        "surface-container-highest": "#323537",
+        "on-background": "#e0e3e5",
+        "surface-container": "#1d2022",
+        "primary-container": "#00c853",
+        "secondary-container": "#ff5e07",
+      },
+      fontFamily: {
+        "display": ["Sora"],
+        "h1": ["Sora"],
+        "h2": ["Sora"],
+        "body-lg": ["Hanken Grotesk"],
+        "body-md": ["Hanken Grotesk"],
+        "label-caps": ["Space Grotesk"],
+        "tech": ["JetBrains Mono", "monospace"],
+      }
+    }
+  }
+}
+</script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap');
-
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --bg:        #0a0c0f;
-    --bg-panel:  #0f1318;
-    --bg-card:   #141920;
-    --bg-hover:  #1a2230;
-    --border:    #1e2a38;
-    --border-hi: #2a3a50;
-    --green:     #00e676;
-    --green-dim: #00c853;
-    --amber:     #ffab00;
-    --amber-dim: #ff8f00;
-    --blue:      #40c4ff;
-    --blue-dim:  #0091ea;
-    --red:       #ff5252;
-    --muted:     #4a5568;
-    --text:      #e2e8f0;
-    --text-dim:  #718096;
-    --text-faint:#2d3748;
-    --mono:      'JetBrains Mono', monospace;
-    --sans:      'DM Sans', sans-serif;
-    --radius:    6px;
-    --radius-lg: 10px;
-  }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 14px;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    height: 100vh;
-  }
-
-  /* ── Header ── */
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 24px;
-    height: 52px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg-panel);
-    flex-shrink: 0;
-  }
-
-  .logo {
-    font-family: var(--mono);
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--green);
-    letter-spacing: -0.5px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .logo-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--green);
-    animation: pulse 2s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50%       { opacity: 0.4; transform: scale(0.8); }
-  }
-
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-  }
-
-  .conn-status {
-    font-family: var(--mono);
-    font-size: 11px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--text-dim);
-  }
-
-  .conn-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--muted);
-    transition: background 0.3s;
-  }
-
-  .conn-dot.connected { background: var(--green); }
-  .conn-dot.error     { background: var(--red); }
-
-  .ts {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text-faint);
-  }
-
-  /* ── Main layout ── */
-  .main {
-    display: grid;
-    grid-template-columns: 280px 1fr 300px;
-    grid-template-rows: 1fr;
-    flex: 1;
-    overflow: hidden;
-    gap: 0;
-  }
-
-  .panel {
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .panel:last-child { border-right: none; }
-
-  .panel-header {
-    padding: 14px 16px 10px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .panel-title {
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--text-dim);
-  }
-
-  .badge {
-    font-family: var(--mono);
-    font-size: 10px;
-    padding: 2px 7px;
-    border-radius: 20px;
-    font-weight: 500;
-  }
-
-  .badge-green  { background: rgba(0,230,118,0.12); color: var(--green); }
-  .badge-amber  { background: rgba(255,171,0,0.12);  color: var(--amber); }
-  .badge-blue   { background: rgba(64,196,255,0.12); color: var(--blue); }
-  .badge-muted  { background: rgba(74,85,104,0.2);   color: var(--text-dim); }
-  .badge-red    { background: rgba(255,82,82,0.12);  color: var(--red); }
-
-  .panel-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
-
-  /* ── Capabilities panel ── */
-  .tag-group { margin-bottom: 16px; }
-
-  .tag-group-label {
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: var(--text-faint);
-    padding: 4px 8px;
-    margin-bottom: 6px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .tag-group-label::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--border);
-  }
-
-  .cap-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 10px 12px;
-    margin-bottom: 6px;
-    cursor: default;
-    transition: border-color 0.15s, background 0.15s;
-  }
-
-  .cap-card:hover {
-    border-color: var(--border-hi);
-    background: var(--bg-hover);
-  }
-
-  .cap-card.active {
-    border-color: var(--amber);
-    background: rgba(255,171,0,0.05);
-  }
-
-  .cap-card.done {
-    border-color: var(--green);
-    background: rgba(0,230,118,0.04);
-  }
-
-  .cap-name {
-    font-family: var(--mono);
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text);
-    margin-bottom: 3px;
-  }
-
-  .cap-desc {
-    font-size: 11px;
-    color: var(--text-dim);
-    line-height: 1.4;
-    margin-bottom: 6px;
-  }
-
-  .cap-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .tag-pill {
-    font-family: var(--mono);
-    font-size: 9px;
-    font-weight: 500;
-    padding: 1px 6px;
-    border-radius: 20px;
-    border: 1px solid var(--border-hi);
-    color: var(--text-dim);
-    letter-spacing: 0.3px;
-  }
-
-  /* ── Center panel ── */
-  .center-panel {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .instruction-area {
-    padding: 16px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    background: var(--bg-panel);
-  }
-
-  .instruction-label {
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: var(--text-faint);
-    margin-bottom: 8px;
-  }
-
-  .instruction-row {
-    display: flex;
-    gap: 8px;
-  }
-
-  .instruction-input {
-    flex: 1;
-    background: var(--bg-card);
-    border: 1px solid var(--border-hi);
-    border-radius: var(--radius);
-    padding: 10px 14px;
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--text);
-    outline: none;
-    transition: border-color 0.15s;
-  }
-
-  .instruction-input:focus { border-color: var(--blue); }
-  .instruction-input::placeholder { color: var(--muted); }
-
-  .send-btn {
-    background: var(--green);
-    color: #000;
-    border: none;
-    border-radius: var(--radius);
-    padding: 10px 20px;
-    font-family: var(--mono);
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    letter-spacing: 0.5px;
-    transition: background 0.15s, transform 0.1s;
-    white-space: nowrap;
-  }
-
-  .send-btn:hover   { background: #69f0ae; }
-  .send-btn:active  { transform: scale(0.97); }
-  .send-btn:disabled {
-    background: var(--muted);
-    color: var(--text-faint);
-    cursor: not-allowed;
-  }
-
-  /* ── Plan visualization ── */
-  .plan-area {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
-
-  .plan-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--text-faint);
-    font-family: var(--mono);
-    font-size: 12px;
-    text-align: center;
-    gap: 8px;
-  }
-
-  .plan-instruction {
-    font-size: 13px;
-    color: var(--text-dim);
-    margin-bottom: 20px;
-    padding: 10px 14px;
-    background: var(--bg-card);
-    border-left: 3px solid var(--blue);
-    border-radius: 0 var(--radius) var(--radius) 0;
-    font-style: italic;
-  }
-
-  .plan-steps { display: flex; flex-direction: column; gap: 10px; }
-
-  .step-card {
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    padding: 12px 14px;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    transition: all 0.2s;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .step-card::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 3px;
-    background: var(--border);
-    transition: background 0.2s;
-  }
-
-  .step-card.pending::before   { background: var(--border); }
-  .step-card.running::before   { background: var(--amber); }
-  .step-card.complete::before  { background: var(--green); }
-  .step-card.failed::before    { background: var(--red); }
-  .step-card.auto::before      { background: var(--blue); }
-
-  .step-card.running {
-    border-color: rgba(255,171,0,0.3);
-    background: rgba(255,171,0,0.04);
-  }
-
-  .step-card.complete {
-    border-color: rgba(0,230,118,0.2);
-    background: rgba(0,230,118,0.03);
-  }
-
-  .step-num {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 700;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border-hi);
-    color: var(--text-dim);
-    flex-shrink: 0;
-    margin-top: 1px;
-    transition: all 0.2s;
-  }
-
-  .step-card.running  .step-num { border-color: var(--amber); color: var(--amber); }
-  .step-card.complete .step-num { border-color: var(--green); color: var(--green); background: rgba(0,230,118,0.1); }
-  .step-card.failed   .step-num { border-color: var(--red); color: var(--red); }
-
-  .step-info { flex: 1; min-width: 0; }
-
-  .step-name {
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text);
-    margin-bottom: 3px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .step-rationale {
-    font-size: 11px;
-    color: var(--text-dim);
-    line-height: 1.4;
-    margin-bottom: 6px;
-  }
-
-  .step-params {
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--blue);
-    background: rgba(64,196,255,0.06);
-    padding: 4px 8px;
-    border-radius: var(--radius);
-    display: inline-block;
-  }
-
-  .step-status {
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    padding: 1px 6px;
-    border-radius: 3px;
-  }
-
-  .running-indicator {
-    display: inline-flex;
-    gap: 3px;
-    align-items: center;
-  }
-
-  .running-indicator span {
-    width: 4px; height: 4px;
-    border-radius: 50%;
-    background: var(--amber);
-    animation: blink 1s ease-in-out infinite;
-  }
-
-  .running-indicator span:nth-child(2) { animation-delay: 0.15s; }
-  .running-indicator span:nth-child(3) { animation-delay: 0.3s; }
-
-  @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50%       { opacity: 0.2; }
-  }
-
-  /* ── Right panel ── */
-  .state-area {
-    padding: 12px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .state-tokens {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .state-token {
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 500;
-    padding: 3px 8px;
-    border-radius: 4px;
-    border: 1px solid var(--border-hi);
-    color: var(--text-dim);
-    letter-spacing: 0.3px;
-    transition: all 0.2s;
-  }
-
-  .state-token.active {
-    background: rgba(0,230,118,0.1);
-    border-color: var(--green);
-    color: var(--green);
-  }
-
-  .no-state {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text-faint);
-    font-style: italic;
-  }
-
-  /* ── Log ── */
-  .log-area {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px 12px;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-    font-family: var(--mono);
-    font-size: 11px;
-    line-height: 1.6;
-  }
-
-  .log-entry {
-    display: flex;
-    gap: 8px;
-    padding: 2px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.02);
-    opacity: 0;
-    animation: fadeIn 0.2s ease forwards;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateX(-4px); }
-    to   { opacity: 1; transform: translateX(0); }
-  }
-
-  .log-ts  { color: var(--text-faint); flex-shrink: 0; }
-  .log-msg { color: var(--text-dim); word-break: break-word; }
-
-  .log-msg.info     { color: var(--text); }
-  .log-msg.success  { color: var(--green); }
-  .log-msg.warning  { color: var(--amber); }
-  .log-msg.error    { color: var(--red); }
-
-  /* ── Status bar ── */
-  .statusbar {
-    height: 28px;
-    border-top: 1px solid var(--border);
-    background: var(--bg-panel);
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    gap: 20px;
-    flex-shrink: 0;
-  }
-
-  .sb-item {
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--text-faint);
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
-
-  .sb-item .val { color: var(--text-dim); }
-  .sb-item .val.ok { color: var(--green); }
-  .sb-item .val.warn { color: var(--amber); }
-
-  .sb-spacer { flex: 1; }
-
-  /* ── Scrollbar ── */
-  ::-webkit-scrollbar { width: 4px; }
+  .font-tech { font-family: 'JetBrains Mono', monospace; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .fill-icon { font-variation-settings: 'FILL' 1; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb { background: #434656; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #8d90a2; }
+  .step-done .step-num { background: rgba(0,230,118,0.08); border-color: rgba(0,230,118,0.35); color: #00e676; }
+  .step-running .step-num { background: rgba(0,230,118,0.12); border-color: #00c853; color: #00e676; box-shadow: 0 0 12px rgba(0,230,118,0.35); }
+  .step-pending .step-card { border-style: dashed; opacity: 0.45; }
+  .cap-active { background: rgba(0,230,118,0.06); border-color: rgba(0,230,118,0.45); box-shadow: 0 0 15px rgba(0,230,118,0.08); }
+  .cap-active .cap-left-bar { background: #00c853; }
+  .log-exec { color: #00e676; text-shadow: 0 0 8px rgba(0,230,118,0.8); }
+  .log-success { color: #00e676; }
+  .log-warn { color: #ff5e07; }
+  .log-info { color: #c3c5d9; }
+  .log-dim { color: #8d90a2; }
 </style>
 </head>
-<body>
+<body class="bg-surface text-on-surface h-full flex flex-col font-body-md overflow-hidden relative">
 
-<header>
-  <div class="logo">
-    <div class="logo-dot"></div>
-    ros2_lingua
-    <span style="font-size:11px; color:var(--text-faint); font-weight:400;">mission control</span>
+<!-- Atmospheric background glow -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] bg-green-500/20/8 rounded-full blur-[140px] pointer-events-none z-0"></div>
+
+<!-- Top Nav -->
+<header class="bg-surface/80 backdrop-blur-xl border-b border-outline-variant/20 flex justify-between items-center h-14 px-5 w-full z-50 shrink-0 shadow-[0_0_20px_rgba(0,230,118,0.04)]">
+  <div class="flex items-center gap-3">
+    <div class="w-2.5 h-2.5 rounded-full bg-green-500/20 shadow-[0_0_10px_rgba(0,230,118,0.8)] animate-pulse"></div>
+    <div class="font-tech text-[15px] font-bold text-on-surface flex items-baseline gap-2 tracking-tight">
+      ros2_lingua
+      <span class="font-label-caps text-[9px] text-on-surface-variant tracking-widest uppercase">Mission Control</span>
+    </div>
   </div>
-  <div class="header-right">
-    <div class="conn-status">
-      <div class="conn-dot" id="connDot"></div>
+  <div class="flex items-center gap-6">
+    <div class="flex items-center gap-2 font-tech text-[11px] text-on-surface-variant" id="connStatus">
+      <div class="w-1.5 h-1.5 rounded-full bg-outline" id="connDot"></div>
       <span id="connLabel">connecting...</span>
     </div>
-    <div class="ts" id="clock"></div>
+    <div class="font-tech text-[11px] text-outline" id="clock"></div>
+    <button class="text-on-surface-variant hover:text-green-400 transition-colors">
+      <span class="material-symbols-outlined text-[18px]">settings</span>
+    </button>
   </div>
 </header>
 
-<div class="main">
+<!-- Main 3-column grid -->
+<main class="flex-1 grid grid-cols-1 lg:grid-cols-[300px_1fr_320px] gap-2 p-2 overflow-hidden z-10">
 
-  <!-- Left: Capabilities -->
-  <div class="panel">
-    <div class="panel-header">
-      <span class="panel-title">capabilities</span>
-      <span class="badge badge-muted" id="capCount">0</span>
+  <!-- LEFT: Capabilities -->
+  <div class="bg-surface-container-low/80 backdrop-blur-lg border border-outline-variant/30 rounded-lg flex flex-col overflow-hidden shadow-lg">
+    <div class="flex justify-between items-center px-4 py-2.5 border-b border-outline-variant/20 shrink-0 bg-surface-container-highest/20">
+      <h2 class="font-label-caps text-[11px] text-on-surface-variant tracking-[0.15em] uppercase">Capabilities</h2>
+      <span class="font-tech text-[10px] bg-surface-variant text-on-surface px-2 py-0.5 rounded-full border border-outline-variant/30" id="capBadge">0</span>
     </div>
-    <div class="panel-body" id="capList">
-      <div style="color:var(--text-faint);font-family:var(--mono);font-size:11px;text-align:center;padding:24px 0;">
-        waiting for nodes...
+    <div class="flex-1 overflow-y-auto p-3 space-y-5" id="capList">
+      <div class="font-tech text-[11px] text-outline text-center py-8">waiting for nodes...</div>
+    </div>
+  </div>
+
+  <!-- CENTER: Instruction + Plan -->
+  <div class="flex flex-col gap-2 overflow-hidden">
+
+    <!-- Instruction input -->
+    <div class="bg-surface-container-low/80 backdrop-blur-lg border border-outline-variant/30 rounded-lg p-4 shadow-lg shrink-0">
+      <label class="block font-label-caps text-[11px] text-on-surface-variant tracking-[0.15em] uppercase mb-3">Natural Language Instruction</label>
+      <div class="flex gap-3">
+        <input id="instrInput" type="text"
+          class="w-full bg-surface-container-highest/30 border border-outline-variant/40 rounded-lg px-4 py-2.5 font-tech text-[13px] text-on-surface focus:outline-none focus:border-green-500/40 focus:shadow-[0_0_15px_rgba(0,230,118,0.12)] transition-all placeholder:text-outline/50"
+          placeholder="Type a command for your robot..."/>
+        <button id="sendBtn" onclick="sendInstruction()"
+          class="bg-green-600 text-black font-label-caps text-[12px] px-5 py-2.5 rounded-lg shadow-[0_4px_15px_rgba(0,230,118,0.25)] hover:shadow-[0_4px_25px_rgba(0,230,118,0.4)] active:scale-95 transition-all flex items-center gap-2 tracking-wide whitespace-nowrap">
+          EXECUTE
+          <span class="material-symbols-outlined text-[16px]">send</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Execution plan -->
+    <div class="bg-surface-container-low/80 backdrop-blur-lg border border-outline-variant/30 rounded-lg flex flex-col flex-1 overflow-hidden shadow-lg">
+      <div class="flex justify-between items-center px-4 py-2.5 border-b border-outline-variant/20 shrink-0 bg-surface-container-highest/20">
+        <h2 class="font-label-caps text-[11px] text-on-surface-variant tracking-[0.15em] uppercase">Execution Plan</h2>
+        <span class="font-tech text-[10px] px-2 py-0.5 rounded-full hidden" id="planStatusBadge"></span>
+      </div>
+      <div class="flex-1 overflow-y-auto p-5 relative" id="planArea">
+        <div class="flex flex-col items-center justify-center h-full gap-3 text-outline font-tech text-[12px]">
+          <span class="material-symbols-outlined text-3xl opacity-30">account_tree</span>
+          <span>send an instruction to generate a plan</span>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Center: Instruction + Plan -->
-  <div class="center-panel">
-    <div class="instruction-area">
-      <div class="instruction-label">natural language instruction</div>
-      <div class="instruction-row">
-        <input
-          class="instruction-input"
-          id="instrInput"
-          type="text"
-          placeholder="go to the table and pick up the bottle..."
-          autocomplete="off"
-        />
-        <button class="send-btn" id="sendBtn" onclick="sendInstruction()">SEND</button>
+  <!-- RIGHT: State + Log -->
+  <div class="flex flex-col gap-2 overflow-hidden">
+
+    <!-- World State -->
+    <div class="bg-surface-container-low/80 backdrop-blur-lg border border-outline-variant/30 rounded-lg shrink-0 shadow-lg">
+      <div class="flex justify-between items-center px-4 py-2.5 border-b border-outline-variant/20 bg-surface-container-highest/20">
+        <h2 class="font-label-caps text-[11px] text-on-surface-variant tracking-[0.15em] uppercase">World State</h2>
+        <span class="font-tech text-[10px] bg-surface-variant text-on-surface px-2 py-0.5 rounded-full border border-outline-variant/30" id="stateBadge">0 tokens</span>
+      </div>
+      <div class="p-3 flex flex-wrap gap-1.5 min-h-[48px]" id="stateTokens">
+        <span class="font-tech text-[10px] text-outline italic">no active tokens</span>
       </div>
     </div>
 
-    <div class="panel-header" style="background:var(--bg-panel);">
-      <span class="panel-title">execution plan</span>
-      <span class="badge" id="planStatus" style="display:none;"></span>
-    </div>
-
-    <div class="plan-area" id="planArea">
-      <div class="plan-empty">
-        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-          <rect x="8" y="8" width="24" height="4" rx="2" fill="currentColor" opacity="0.2"/>
-          <rect x="8" y="17" width="18" height="4" rx="2" fill="currentColor" opacity="0.15"/>
-          <rect x="8" y="26" width="21" height="4" rx="2" fill="currentColor" opacity="0.1"/>
-        </svg>
-        <span>send an instruction to generate a plan</span>
+    <!-- Terminal Log -->
+    <div class="bg-surface-container-lowest/95 backdrop-blur-xl border border-outline-variant/30 rounded-lg flex flex-col flex-1 overflow-hidden shadow-[inset_0_4px_20px_rgba(0,0,0,0.5)]">
+      <div class="flex justify-between items-center px-4 py-2.5 border-b border-outline-variant/20 bg-surface-container-low/50 shrink-0">
+        <h2 class="font-label-caps text-[11px] text-on-surface-variant tracking-[0.15em] uppercase">Terminal Log</h2>
+        <div class="flex gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-full border border-outline-variant/40"></span>
+          <span class="w-2.5 h-2.5 rounded-full border border-outline-variant/40"></span>
+          <span class="w-2.5 h-2.5 rounded-full border border-outline-variant/40"></span>
+        </div>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4 font-tech text-[11px] leading-relaxed space-y-1.5" id="logArea">
+        <!-- logs injected here -->
       </div>
     </div>
   </div>
 
-  <!-- Right: State + Log -->
-  <div class="panel" style="border-right:none; border-left:1px solid var(--border);">
-    <div class="panel-header">
-      <span class="panel-title">robot state</span>
-      <span class="badge badge-green" id="stateCount">0 tokens</span>
-    </div>
-    <div class="state-area">
-      <div class="state-tokens" id="stateTokens">
-        <span class="no-state">no active state tokens</span>
-      </div>
-    </div>
+</main>
 
-    <div class="panel-header" style="border-top:1px solid var(--border);">
-      <span class="panel-title">activity log</span>
-      <span class="badge badge-muted" id="logCount">0</span>
+<!-- Status bar -->
+<footer class="h-7 bg-surface-container-lowest border-t border-outline-variant/20 shrink-0 flex items-center px-4 justify-between font-tech text-[10px] z-50">
+  <div class="flex items-center gap-5 text-outline">
+    <div class="flex items-center gap-1.5">
+      <span class="material-symbols-outlined text-[11px]">memory</span>
+      backend: <span class="text-green-400 ml-1" id="sbBackend">—</span>
     </div>
-    <div class="log-area" id="logArea"></div>
+    <div class="flex items-center gap-1.5">
+      <span class="material-symbols-outlined text-[11px]">route</span>
+      rosbridge: <span class="text-on-surface-variant ml-1">ws://localhost:9090</span>
+    </div>
+    <div class="flex items-center gap-1.5 border-l border-outline-variant/30 pl-4">
+      instructions: <span class="text-on-surface ml-1" id="sbInstr">0</span>
+    </div>
+    <div class="flex items-center gap-1.5">
+      steps run: <span class="text-on-surface ml-1" id="sbSteps">0</span>
+    </div>
   </div>
-
-</div>
-
-<div class="statusbar">
-  <div class="sb-item">ros2_lingua <span class="val">v0.1.0</span></div>
-  <div class="sb-item">backend <span class="val ok" id="sbBackend">—</span></div>
-  <div class="sb-item">instructions <span class="val" id="sbInstrCount">0</span></div>
-  <div class="sb-item">steps run <span class="val" id="sbStepsCount">0</span></div>
-  <div class="sb-spacer"></div>
-  <div class="sb-item">rosbridge <span class="val" id="sbRosbridge">ws://localhost:9090</span></div>
-</div>
+  <div class="text-outline-variant uppercase tracking-widest font-label-caps text-[9px]">ros2_lingua core v0.1.0</div>
+</footer>
 
 <script>
 const ROSBRIDGE_URL = 'ws://localhost:9090';
+let ros = null, connected = false;
+let capabilities = {}, stateTokens = new Set();
+let currentPlan = null, logCount = 0, instrCount = 0, stepsCount = 0;
+let planStepStates = [];
 
-let ros = null;
-let connected = false;
-let capabilities = {};
-let stateTokens = new Set();
-let currentPlan = null;
-let logCount = 0;
-let instrCount = 0;
-let stepsCount = 0;
+// ── Clock ──────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toTimeString().slice(0,8) + ' UTC';
+}
+setInterval(updateClock, 1000); updateClock();
 
+// ── Connection ─────────────────────────────────────────────────
 function connect() {
   try {
     ros = new WebSocket(ROSBRIDGE_URL);
@@ -690,309 +215,329 @@ function connect() {
     ros.onclose   = onDisconnected;
     ros.onerror   = onError;
     ros.onmessage = onMessage;
-  } catch(e) {
-    setConnStatus(false, 'failed to connect');
-  }
+  } catch(e) { setConnStatus(false, 'failed'); }
+}
+
+const listeners = {};
+function onMessage(evt) {
+  try {
+    const msg = JSON.parse(evt.data);
+    if (msg.op === 'publish' && listeners[msg.topic]) listeners[msg.topic](msg.msg);
+    // service response
+    if (msg.op === 'service_response') {
+      const h = pendingCalls[msg.id];
+      if (h) { delete pendingCalls[msg.id]; h(msg.values); }
+    }
+  } catch(e) {}
+}
+const pendingCalls = {};
+
+function subscribe(topic, type, cb) {
+  listeners[topic] = cb;
+  if (ros && ros.readyState === 1)
+    ros.send(JSON.stringify({ op: 'subscribe', topic, type }));
+}
+
+function callService(service, type, args, cb) {
+  if (!ros || ros.readyState !== 1) { addLog('Not connected', 'warn'); return; }
+  const id = 'svc_' + Date.now();
+  pendingCalls[id] = cb;
+  ros.send(JSON.stringify({ op: 'call_service', id, service, type, args }));
 }
 
 function onConnected() {
   connected = true;
   setConnStatus(true, 'connected');
   addLog('Connected to rosbridge at ' + ROSBRIDGE_URL, 'success');
-  subscribe('/lingua/capabilities',  'std_msgs/String',  handleCapabilities);
-  subscribe('/lingua/current_plan',  'std_msgs/String',  handlePlan);
-  subscribe('/mock/robot_log',       'std_msgs/String',  handleRobotLog);
-  subscribe('/mock/balance_status',  'std_msgs/Bool',    handleBalance);
-  subscribe('/mock/current_location','std_msgs/String',  handleLocation);
+  subscribe('/lingua/capabilities', 'std_msgs/String', handleCapabilities);
+  subscribe('/lingua/current_plan',  'std_msgs/String', handlePlan);
+  subscribe('/mock/robot_log',       'std_msgs/String', handleRobotLog);
+  subscribe('/mock/balance_status',  'std_msgs/Bool',   handleBalance);
+  subscribe('/mock/current_location','std_msgs/String', handleLocation);
 }
-
 function onDisconnected() {
   connected = false;
-  setConnStatus(false, 'disconnected');
-  addLog('Lost connection to rosbridge. Retrying in 3s...', 'warning');
+  setConnStatus(false, 'disconnected — retrying...');
+  addLog('Lost connection to rosbridge. Retrying in 3s...', 'warn');
   setTimeout(connect, 3000);
 }
-
-function onError(e) {
+function onError() {
   setConnStatus(false, 'error');
-  addLog('WebSocket error — is rosbridge running? (ros2 launch rosbridge_server rosbridge_websocket_launch.xml)', 'error');
-}
-
-const listeners = {};
-
-function onMessage(evt) {
-  try {
-    const msg = JSON.parse(evt.data);
-    if (msg.op === 'publish' && listeners[msg.topic]) {
-      listeners[msg.topic](msg.msg);
-    }
-  } catch(e) {}
-}
-
-function subscribe(topic, type, cb) {
-  listeners[topic] = cb;
-  if (ros && ros.readyState === 1) {
-    ros.send(JSON.stringify({ op: 'subscribe', topic, type }));
-  }
-}
-
-function callService(service, type, args, cb) {
-  if (!ros || ros.readyState !== 1) {
-    addLog('Not connected to rosbridge', 'error');
-    return;
-  }
-  const id = 'call_' + Date.now();
-  const handler = (evt) => {
-    try {
-      const msg = JSON.parse(evt.data);
-      if (msg.id === id && msg.op === 'service_response') {
-        ros.removeEventListener('message', handler);
-        cb && cb(msg.values);
-      }
-    } catch(e) {}
-  };
-  ros.addEventListener('message', handler);
-  ros.send(JSON.stringify({ op: 'call_service', id, service, type, args }));
+  addLog('WebSocket error. Is rosbridge running?', 'warn');
+  addLog('Run: ros2 launch rosbridge_server rosbridge_websocket_launch.xml', 'dim');
 }
 
 function setConnStatus(ok, label) {
-  document.getElementById('connDot').className = 'conn-dot ' + (ok ? 'connected' : 'error');
+  const dot = document.getElementById('connDot');
+  dot.className = `w-1.5 h-1.5 rounded-full ${ok ? 'bg-green-500/20 shadow-[0_0_6px_rgba(0,230,118,0.8)]' : 'bg-outline'}`;
   document.getElementById('connLabel').textContent = label;
 }
 
+// ── Capability rendering ───────────────────────────────────────
 function handleCapabilities(msg) {
   try {
     const caps = JSON.parse(msg.data);
     capabilities = {};
     caps.forEach(c => capabilities[c.name] = c);
     renderCapabilities();
-    document.getElementById('capCount').textContent = caps.length;
+    document.getElementById('capBadge').textContent = caps.length;
   } catch(e) {}
-}
-
-function handlePlan(msg) {
-  try {
-    currentPlan = JSON.parse(msg.data);
-    renderPlan(currentPlan);
-    instrCount++;
-    document.getElementById('sbInstrCount').textContent = instrCount;
-  } catch(e) {}
-}
-
-function handleRobotLog(msg) {
-  addLog(msg.data);
-}
-
-function handleBalance(msg) {
-  if (msg.data) {
-    stateTokens.add('robot_is_balanced');
-  } else {
-    stateTokens.delete('robot_is_balanced');
-  }
-  renderState();
-}
-
-function handleLocation(msg) {
-  stateTokens.forEach(t => { if (t.startsWith('at_')) stateTokens.delete(t); });
-  if (msg.data && msg.data !== 'unknown') {
-    stateTokens.add('robot_at_location');
-  }
-  renderState();
 }
 
 function renderCapabilities() {
   const el = document.getElementById('capList');
   const caps = Object.values(capabilities);
-
-  if (caps.length === 0) {
-    el.innerHTML = '<div style="color:var(--text-faint);font-family:var(--mono);font-size:11px;text-align:center;padding:24px 0;">waiting for nodes...</div>';
+  if (!caps.length) {
+    el.innerHTML = '<div class="font-tech text-[11px] text-outline text-center py-8">waiting for nodes...</div>';
     return;
   }
-
   const groups = {};
   caps.forEach(c => {
-    const tag = (c.tags && c.tags[0]) || 'other';
-    if (!groups[tag]) groups[tag] = [];
-    groups[tag].push(c);
+    const g = (c.tags && c.tags[0]) || 'other';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(c);
   });
+  const activeCaps = new Set(
+    (currentPlan?.steps || []).filter(s => s._state === 'running').map(s => s.capability_name)
+  );
+  const doneCaps = new Set(
+    (currentPlan?.steps || []).filter(s => s._state === 'done').map(s => s.capability_name)
+  );
 
-  const activeCap = currentPlan && currentPlan.steps
-    ? currentPlan.steps.find(s => s._status === 'running')?.capability_name
-    : null;
-  const doneCaps = currentPlan && currentPlan.steps
-    ? new Set(currentPlan.steps.filter(s => s._status === 'complete').map(s => s.capability_name))
-    : new Set();
-
-  el.innerHTML = Object.entries(groups).map(([tag, tagCaps]) => `
-    <div class="tag-group">
-      <div class="tag-group-label">${tag}</div>
-      ${tagCaps.map(c => `
-        <div class="cap-card ${c.name === activeCap ? 'active' : doneCaps.has(c.name) ? 'done' : ''}">
-          <div class="cap-name">${c.name}</div>
-          <div class="cap-desc">${c.description.length > 80 ? c.description.slice(0,80)+'…' : c.description}</div>
-          <div class="cap-tags">
-            ${(c.tags || []).map(t => `<span class="tag-pill">${t}</span>`).join('')}
-            ${c.preconditions && c.preconditions.length ? `<span class="tag-pill" style="color:var(--amber-dim);border-color:rgba(255,171,0,0.3);">req: ${c.preconditions.join(', ')}</span>` : ''}
-          </div>
-        </div>
-      `).join('')}
+  el.innerHTML = Object.entries(groups).map(([tag, gcaps]) => `
+    <div>
+      <div class="font-tech text-[10px] text-outline uppercase tracking-wider mb-2 flex items-center gap-2">
+        ${tag}
+        <div class="flex-1 h-[1px] bg-outline-variant/30"></div>
+      </div>
+      <div class="space-y-2">
+        ${gcaps.map(c => {
+          const isActive = activeCaps.has(c.name);
+          const isDone   = doneCaps.has(c.name);
+          return `
+          <div class="relative rounded-lg p-3 border transition-all duration-200 hover:bg-surface-container-highest/40
+            ${isActive ? 'cap-active bg-surface-container/40' : 'bg-surface-container/40 border-outline-variant/20'}">
+            <div class="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg cap-left-bar
+              ${isActive ? 'bg-green-500/20' : 'bg-transparent'}"></div>
+            <div class="font-tech text-[12px] text-on-surface font-bold mb-1 pl-1 flex items-center justify-between">
+              ${c.name}
+              ${isDone ? '<span class="material-symbols-outlined text-[13px] text-outline fill-icon">check_circle</span>' : ''}
+              ${isActive ? `<span class="flex gap-0.5">
+                <span class="w-1 h-1 bg-green-500/20 rounded-full animate-pulse"></span>
+                <span class="w-1 h-1 bg-green-500/20 rounded-full animate-pulse" style="animation-delay:0.15s"></span>
+                <span class="w-1 h-1 bg-green-500/20 rounded-full animate-pulse" style="animation-delay:0.3s"></span>
+              </span>` : ''}
+            </div>
+            <p class="font-tech text-[11px] text-on-surface-variant leading-relaxed mb-2 pl-1">
+              ${c.description.length > 75 ? c.description.slice(0,75) + '…' : c.description}
+            </p>
+            <div class="flex flex-wrap gap-1.5 pl-1">
+              ${(c.tags||[]).map(t => `<span class="font-tech text-[9px] px-1.5 py-0.5 rounded-full border border-outline-variant/40 text-outline">${t}</span>`).join('')}
+              ${(c.preconditions||[]).map(p => `<span class="font-tech text-[9px] px-1.5 py-0.5 rounded-full border border-secondary-container/30 text-secondary-container bg-secondary-container/5">req: ${p}</span>`).join('')}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
     </div>
   `).join('');
 }
 
+// ── Plan rendering ─────────────────────────────────────────────
+function handlePlan(msg) {
+  try {
+    currentPlan = JSON.parse(msg.data);
+    currentPlan.steps.forEach(s => s._state = 'pending');
+    renderPlan(currentPlan);
+    instrCount++;
+    document.getElementById('sbInstr').textContent = instrCount;
+    animatePlan();
+  } catch(e) {}
+}
+
 function renderPlan(plan) {
   const el = document.getElementById('planArea');
-  const statusEl = document.getElementById('planStatus');
+  const badge = document.getElementById('planStatusBadge');
 
   if (!plan || !plan.steps || plan.steps.length === 0) {
-    statusEl.style.display = 'none';
+    badge.className = 'hidden';
     if (!plan.feasible) {
       el.innerHTML = `
-        <div style="padding:20px;">
-          <div style="color:var(--red);font-family:var(--mono);font-size:12px;margin-bottom:8px;">NOT FEASIBLE</div>
-          <div style="color:var(--text-dim);font-size:13px;">${plan.reason || 'Unknown reason'}</div>
+        <div class="p-4">
+          <div class="font-tech text-[11px] text-secondary-container mb-2 uppercase tracking-wider">NOT FEASIBLE</div>
+          <div class="font-tech text-[12px] text-on-surface-variant">${plan.reason || 'Unknown reason'}</div>
         </div>`;
     }
     return;
   }
 
-  statusEl.style.display = 'inline-flex';
-  statusEl.className = 'badge badge-amber';
-  statusEl.textContent = 'executing';
+  badge.className = 'font-tech text-[10px] bg-green-500/20/20 text-green-400 border border-green-500/40/30 px-2 py-0.5 rounded-full flex items-center gap-1.5';
+  badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-green-500/20 animate-pulse"></span> EXECUTING';
 
+  const steps = plan.steps;
   el.innerHTML = `
-    <div class="plan-instruction">"${plan.original_instruction}"</div>
-    <div class="plan-steps" id="planSteps">
-      ${plan.steps.map((step, i) => {
-        const isAuto = step.rationale && step.rationale.includes('Auto-inserted');
-        const params = Object.entries(step.parameters || {})
-          .map(([k,v]) => `${k}: "${v}"`)
-          .join('  ');
-        return `
-          <div class="step-card ${isAuto ? 'auto' : 'pending'}" id="step-${i}">
-            <div class="step-num">${i+1}</div>
-            <div class="step-info">
-              <div class="step-name">
-                ${step.capability_name}
-                ${isAuto ? '<span class="badge badge-blue" style="font-size:9px;">auto-chained</span>' : ''}
+    <div class="relative">
+      <div class="absolute left-[15px] top-6 bottom-6 w-[2px] bg-outline-variant/20 rounded-full"></div>
+      <div class="space-y-5" id="planSteps">
+        ${steps.map((step, i) => {
+          const isAuto = step.rationale && step.rationale.includes('Auto-inserted');
+          const params = Object.entries(step.parameters || {})
+            .map(([k,v]) => `${k}: "${v}"`).join('  ');
+          return `
+          <div class="flex gap-3 items-start step-pending" id="step-${i}">
+            <div class="step-num w-8 h-8 rounded-full bg-surface border-2 border-outline-variant/40 flex items-center justify-center font-tech text-[11px] text-outline shrink-0 mt-0.5 transition-all duration-300 relative">
+              ${i+1}
+            </div>
+            <div class="flex-1 step-card bg-surface-container/30 border border-outline-variant/20 rounded-lg p-3.5 transition-all duration-300">
+              <div class="flex justify-between items-start mb-1">
+                <div class="font-tech text-[12px] text-on-surface font-bold flex items-center gap-2">
+                  ${step.capability_name}
+                  ${isAuto ? '<span class="font-tech text-[9px] bg-outline-variant/30 text-outline px-1.5 py-0.5 rounded-sm uppercase">Auto-Chained</span>' : ''}
+                </div>
+                <div class="step-timer hidden font-tech text-[9px] text-outline bg-surface-variant/50 px-1.5 py-0.5 rounded"></div>
               </div>
-              ${step.rationale && !step.rationale.includes('Auto-inserted')
-                ? `<div class="step-rationale">${step.rationale}</div>`
-                : ''}
-              ${params
-                ? `<div class="step-params">${params}</div>`
-                : ''}
+              ${step.rationale && !step.rationale.includes('Auto-inserted') ? `<p class="font-tech text-[10px] text-outline/60 mt-0.5 mb-2">${step.rationale}</p>` : ''}
+              ${params ? `<div class="font-tech text-[11px] text-green-400/70 bg-green-500/5 inline-block px-2 py-1 rounded mt-1 border border-green-500/10">${params}</div>` : ''}
             </div>
           </div>`;
-      }).join('')}
+        }).join('')}
+      </div>
     </div>`;
 
-  animatePlanSteps(plan.steps.length);
+  renderCapabilities();
 }
 
-function animatePlanSteps(total) {
+function animatePlan() {
+  if (!currentPlan || !currentPlan.steps) return;
+  const steps = currentPlan.steps;
   let i = 0;
+  const timers = {};
+
   function runStep() {
-    if (i >= total) {
-      const statusEl = document.getElementById('planStatus');
-      if (statusEl) {
-        statusEl.className = 'badge badge-green';
-        statusEl.textContent = 'complete';
+    if (i >= steps.length) {
+      const badge = document.getElementById('planStatusBadge');
+      if (badge) {
+        badge.className = 'font-tech text-[10px] bg-surface-variant text-on-surface-variant border border-outline-variant/30 px-2 py-0.5 rounded-full';
+        badge.textContent = 'COMPLETE';
       }
       return;
     }
-    const prevCard = i > 0 ? document.getElementById('step-' + (i-1)) : null;
-    if (prevCard) {
-      prevCard.classList.remove('running');
-      prevCard.classList.add('complete');
-      stepsCount++;
-      document.getElementById('sbStepsCount').textContent = stepsCount;
-    }
-    const card = document.getElementById('step-' + i);
-    if (card) {
-      card.classList.remove('pending', 'auto');
-      card.classList.add('running');
-      const numEl = card.querySelector('.step-num');
-      if (numEl) {
-        numEl.innerHTML = `<div class="running-indicator"><span></span><span></span><span></span></div>`;
+
+    // Complete previous
+    if (i > 0) {
+      const prev = document.getElementById('step-' + (i-1));
+      if (prev) {
+        const elapsed = ((Date.now() - timers[i-1]) / 1000).toFixed(1);
+        prev.className = prev.className.replace('step-running', 'step-done');
+        const numEl = prev.querySelector('.step-num');
+        if (numEl) numEl.innerHTML = '<span class="material-symbols-outlined fill-icon text-[14px]">check</span>';
+        const timer = prev.querySelector('.step-timer');
+        if (timer) { timer.textContent = elapsed + 's'; timer.classList.remove('hidden'); }
+        steps[i-1]._state = 'done';
+        stepsCount++;
+        document.getElementById('sbSteps').textContent = stepsCount;
+        addLog(`step ${i} complete: ${steps[i-1].capability_name}`, 'success');
       }
     }
+
+    // Activate current
+    const cur = document.getElementById('step-' + i);
+    if (cur) {
+      timers[i] = Date.now();
+      cur.className = cur.className.replace('step-pending', 'step-running');
+      const numEl = cur.querySelector('.step-num');
+      if (numEl) {
+        numEl.innerHTML = `<div class="flex gap-0.5">
+          <span class="w-1 h-1 bg-green-500/20 rounded-full animate-bounce"></span>
+          <span class="w-1 h-1 bg-green-500/20 rounded-full animate-bounce" style="animation-delay:0.1s"></span>
+          <span class="w-1 h-1 bg-green-500/20 rounded-full animate-bounce" style="animation-delay:0.2s"></span>
+        </div>`;
+      }
+      const card = cur.querySelector('.step-card');
+      if (card) card.className = card.className.replace('bg-surface-container/30 border-outline-variant/20', 'bg-green-500/20/5 border-green-500/40/40 shadow-[0_4px_20px_rgba(0,230,118,0.04)]');
+      steps[i]._state = 'running';
+      addLog(`[exec] step ${i+1}: ${steps[i].capability_name} initiating...`, 'exec');
+    }
+
     renderCapabilities();
     i++;
-    setTimeout(runStep, 2200 + Math.random() * 800);
+    setTimeout(runStep, 2000 + Math.random() * 1000);
   }
-  setTimeout(runStep, 400);
+
+  setTimeout(runStep, 500);
 }
 
+// ── State ──────────────────────────────────────────────────────
+function handleBalance(msg) {
+  if (msg.data) stateTokens.add('robot_is_balanced');
+  else stateTokens.delete('robot_is_balanced');
+  renderState();
+}
+function handleLocation(msg) {
+  stateTokens.forEach(t => { if (t.startsWith('robot_at_')) stateTokens.delete(t); });
+  if (msg.data && msg.data !== 'unknown') stateTokens.add('robot_at_location');
+  renderState();
+}
 function renderState() {
   const el = document.getElementById('stateTokens');
   const count = stateTokens.size;
-  document.getElementById('stateCount').textContent = count + ' token' + (count !== 1 ? 's' : '');
-
-  if (count === 0) {
-    el.innerHTML = '<span class="no-state">no active state tokens</span>';
+  document.getElementById('stateBadge').textContent = count + ' token' + (count !== 1 ? 's' : '');
+  if (!count) {
+    el.innerHTML = '<span class="font-tech text-[10px] text-outline italic">no active tokens</span>';
     return;
   }
-  el.innerHTML = Array.from(stateTokens).map(t =>
-    `<span class="state-token active">${t}</span>`
-  ).join('');
+  el.innerHTML = Array.from(stateTokens).map(t => `
+    <div class="font-tech text-[10px] px-2.5 py-1 rounded border border-green-500/40/40 text-green-400 bg-green-500/20/5 shadow-[0_0_8px_rgba(0,230,118,0.08)]">${t}</div>
+  `).join('');
 }
 
-function addLog(msg, level) {
+// ── Log ────────────────────────────────────────────────────────
+function handleRobotLog(msg) { addLog(msg.data, 'info'); }
+function addLog(text, level) {
   const el = document.getElementById('logArea');
   const ts = new Date().toTimeString().slice(0,8);
-  logCount++;
-  document.getElementById('logCount').textContent = logCount;
-
-  const msgClass = level || (
-    msg.includes('✅') || msg.includes('ready') || msg.includes('Registered') ? 'success' :
-    msg.includes('❌') || msg.includes('error') || msg.includes('Error') ? 'error' :
-    msg.includes('⚠') || msg.includes('DEMO') || msg.includes('warn') ? 'warning' :
-    'info'
-  );
-
-  const entry = document.createElement('div');
-  entry.className = 'log-entry';
-  entry.innerHTML = `
-    <span class="log-ts">${ts}</span>
-    <span class="log-msg ${msgClass}">${msg}</span>`;
-  el.appendChild(entry);
+  const cls = level === 'exec' ? 'log-exec' :
+              level === 'success' ? 'log-success' :
+              level === 'warn' ? 'log-warn' :
+              level === 'dim' ? 'log-dim' : 'log-info';
+  const row = document.createElement('div');
+  row.className = 'flex gap-3';
+  row.innerHTML = `<span class="text-outline/50 shrink-0">${ts}</span><span class="${cls}">${text}</span>`;
+  el.appendChild(row);
   el.scrollTop = el.scrollHeight;
-
-  while (el.children.length > 200) el.removeChild(el.firstChild);
+  while (el.children.length > 300) el.removeChild(el.firstChild);
 }
 
+// ── Send instruction ────────────────────────────────────────────
 function sendInstruction() {
   const input = document.getElementById('instrInput');
   const instruction = input.value.trim();
   if (!instruction) return;
-  if (!connected) {
-    addLog('Not connected to rosbridge', 'error');
-    return;
-  }
+  if (!connected) { addLog('Not connected to rosbridge', 'warn'); return; }
 
-  addLog(`Sending: "${instruction}"`, 'info');
+  addLog(`[info] Received grounding request: "${instruction}"`, 'info');
   document.getElementById('sendBtn').disabled = true;
+  document.getElementById('sendBtn').className = document.getElementById('sendBtn').className.replace('bg-green-600', 'bg-outline/30');
 
   callService(
     '/lingua/ground',
     'ros2_lingua_interfaces/srv/GroundInstruction',
     { instruction },
     (result) => {
-      document.getElementById('sendBtn').disabled = false;
+      const btn = document.getElementById('sendBtn');
+      btn.disabled = false;
+      btn.className = btn.className.replace('bg-outline/30', 'bg-green-500/20');
+
       if (result && result.success) {
-        addLog('Plan generated successfully', 'success');
         try {
           const plan = JSON.parse(result.plan_json);
-          renderPlan(plan);
+          addLog(`[success] LLM Planner generated ${plan.steps.length}-step sequence. Feasibility check passed.`, 'success');
+          handlePlan({ data: result.plan_json });
         } catch(e) {}
       } else {
-        addLog('Grounding failed: ' + (result ? result.message : 'no response'), 'error');
-        document.getElementById('sendBtn').disabled = false;
+        addLog(`[warn] Grounding failed: ${result ? result.message : 'no response'}`, 'warn');
       }
     }
   );
-
   input.value = '';
 }
 
@@ -1000,16 +545,10 @@ document.getElementById('instrInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') sendInstruction();
 });
 
-function updateClock() {
-  document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8);
-}
-
-setInterval(updateClock, 1000);
-updateClock();
+// ── Boot ───────────────────────────────────────────────────────
+addLog('[info] ros2_lingua dashboard initializing...', 'dim');
+addLog(`[info] Connecting to rosbridge at ${ROSBRIDGE_URL}...`, 'dim');
 connect();
-
-addLog('ros2_lingua dashboard initializing...', 'info');
-addLog('Connecting to rosbridge at ' + ROSBRIDGE_URL + '...', 'info');
 </script>
 </body>
 </html>

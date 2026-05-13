@@ -6,6 +6,8 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
 [![Tests](https://img.shields.io/badge/Tests-20%20passed-brightgreen)]()
+[![Release](https://img.shields.io/github/v/release/purahan/ros2_lingua)](https://github.com/purahan/ros2_lingua/releases)
+[![Issues](https://img.shields.io/github/issues/purahan/ros2_lingua)](https://github.com/purahan/ros2_lingua/issues)
 
 📖 **[Documentation](https://purahan.github.io/ros2_lingua/)**
 

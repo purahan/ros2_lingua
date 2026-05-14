@@ -1,63 +1,102 @@
 """
 ros2_lingua.dispatcher_node
 ----------------------------
-Subscribes to /lingua/current_plan and executes each step in order.
+Subscribes to /lingua/current_plan and executes each step by routing
+to the appropriate dispatch protocol.
 
-Robustness features added in this version:
-- Configurable step retry count (step_max_retries parameter)
-- Configurable step timeout (step_timeout_sec parameter)
-- Configurable failure mode (on_step_failure: abort | skip | retry)
-- Detailed execution status publishing per step
-- Guards against executing a new plan while one is already running
+Three dispatch levels, checked in order:
+
+  Level 1 — LinguaAction server (preferred)
+    The capability's ros_action points to a node implementing the
+    generic LinguaAction interface. Works out of the box.
+
+  Level 2 — DispatchConfig mapping
+    A DispatchConfig instance is provided mapping capability names to
+    existing typed actions/services. Zero subclassing required.
+
+  Level 3 — Subclass override (escape hatch)
+    Override _call_action() / _call_service() for full control.
+
+After each step completes, the dispatcher automatically updates
+/lingua/update_state with the state_set/state_clear from the result.
 """
 
 import json
-import time
 import rclpy
+from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from std_msgs.msg import String
+from typing import Optional
 
+from ros2_lingua_interfaces.srv import UpdateState
 from ros2_lingua_interfaces.msg import ExecutionStatus
 
 
 class DispatcherNode(Node):
+    """
+    Executes ActionPlans produced by the GroundingNode.
 
-    def __init__(self):
+    Parameters:
+        step_timeout_sec (float): Max seconds to wait for a single step.
+                                  Default: 60.0
+        dispatch_config:          Optional DispatchConfig instance (Level 2).
+    """
+
+    def __init__(self, dispatch_config=None):
         super().__init__("lingua_dispatcher_node")
 
-        # --- Parameters ---
-        self.declare_parameter("step_max_retries", 2)
-        self.declare_parameter("step_timeout_sec", 30.0)
-        # on_step_failure: "abort" | "skip" | "retry"
-        self.declare_parameter("on_step_failure", "abort")
-
-        self._step_max_retries  = self.get_parameter("step_max_retries").value
-        self._step_timeout_sec  = self.get_parameter("step_timeout_sec").value
-        self._on_step_failure   = self.get_parameter("on_step_failure").value
-        self._executing         = False   # guard against concurrent plans
+        self.declare_parameter("step_timeout_sec", 60.0)
+        self._step_timeout = self.get_parameter("step_timeout_sec").value
+        self._dispatch_config = dispatch_config
 
         self._callback_group = ReentrantCallbackGroup()
 
+        # Subscribe to plans from the GroundingNode
         self._plan_sub = self.create_subscription(
-            String, "/lingua/current_plan",
-            self._handle_plan, 10,
+            String,
+            "/lingua/current_plan",
+            self._handle_plan,
+            10,
             callback_group=self._callback_group,
         )
+
+        # Subscribe to capability registry for ros_action/ros_service lookup
         self._caps_sub = self.create_subscription(
-            String, "/lingua/capabilities",
-            self._handle_capabilities, 10,
-        )
-        self._status_pub = self.create_publisher(
-            ExecutionStatus, "/lingua/execution_status", 10,
+            String,
+            "/lingua/capabilities",
+            self._handle_capabilities,
+            10,
         )
 
+        # Publish execution status
+        self._status_pub = self.create_publisher(
+            ExecutionStatus,
+            "/lingua/execution_status",
+            10,
+        )
+
+        # State update client — used after each step completes
+        self._state_client = self.create_client(
+            UpdateState,
+            "/lingua/update_state",
+            callback_group=self._callback_group,
+        )
+
+        # Cached action clients keyed by action name
+        self._action_clients = {}
+
+        # Capability cache from registry broadcast
         self._capability_map = {}
+
+        self.get_logger().info("DispatcherNode ready.")
+
+    def set_dispatch_config(self, dispatch_config) -> None:
+        """Set or replace the DispatchConfig after construction."""
+        self._dispatch_config = dispatch_config
         self.get_logger().info(
-            f"DispatcherNode ready. "
-            f"[retries={self._step_max_retries}, "
-            f"timeout={self._step_timeout_sec}s, "
-            f"on_failure={self._on_step_failure}]"
+            f"DispatchConfig registered for: "
+            f"{dispatch_config.registered_capabilities()}"
         )
 
     # ------------------------------------------------------------------
@@ -76,13 +115,6 @@ class DispatcherNode(Node):
     # ------------------------------------------------------------------
 
     def _handle_plan(self, msg: String):
-        if self._executing:
-            self.get_logger().warn(
-                "Received new plan while already executing one. "
-                "Ignoring — wait for current plan to complete or fail."
-            )
-            return
-
         try:
             plan_data = json.loads(msg.data)
         except json.JSONDecodeError as e:
@@ -91,153 +123,413 @@ class DispatcherNode(Node):
 
         steps       = plan_data.get("steps", [])
         instruction = plan_data.get("original_instruction", "")
-
-        if not steps:
-            self.get_logger().warn("Received empty plan — nothing to execute.")
-            return
+        total       = len(steps)
 
         self.get_logger().info(
-            f"Executing plan for: '{instruction}' ({len(steps)} steps)"
+            f"Executing plan: '{instruction}' ({total} steps)"
         )
-        self._executing = True
         self._publish_status("STARTED", instruction=instruction)
 
-        try:
-            for i, step in enumerate(steps):
-                cap_name = step.get("capability_name", "")
-                params   = step.get("parameters", {})
+        for i, step in enumerate(steps):
+            cap_name = step.get("capability_name", "")
+            params   = step.get("parameters", {})
 
-                self.get_logger().info(f"Step {i+1}/{len(steps)}: {cap_name}")
-                success = self._execute_step_with_retry(cap_name, params, i)
+            self.get_logger().info(f"Step {i+1}/{total}: {cap_name}")
+            self._publish_status("STEP_STARTED", step=cap_name, instruction=instruction)
 
-                if not success:
-                    if self._on_step_failure == "skip":
-                        self.get_logger().warn(
-                            f"Step '{cap_name}' failed — skipping (on_step_failure=skip)."
-                        )
-                        self._publish_status(
-                            "STEP_SKIPPED", step=cap_name, instruction=instruction
-                        )
-                        continue
-                    else:  # abort (default)
-                        self.get_logger().error(
-                            f"Step '{cap_name}' failed — aborting plan."
-                        )
-                        self._publish_status(
-                            "FAILED", step=cap_name, instruction=instruction
-                        )
-                        return
+            success, state_set, state_clear = self._execute_step(cap_name, params)
 
-                self._publish_status(
-                    "STEP_COMPLETE", step=cap_name, instruction=instruction
+            if state_set or state_clear:
+                self._update_state(state_set, state_clear)
+
+            if not success:
+                self.get_logger().error(
+                    f"Step '{cap_name}' failed. Aborting plan."
                 )
+                self._publish_status("FAILED", step=cap_name, instruction=instruction)
+                return
 
-            self._publish_status("COMPLETED", instruction=instruction)
-            self.get_logger().info("Plan executed successfully.")
+            self._publish_status("STEP_COMPLETE", step=cap_name, instruction=instruction)
 
-        finally:
-            self._executing = False
+        self._publish_status("COMPLETED", instruction=instruction)
+        self.get_logger().info("Plan executed successfully.")
 
-    def _execute_step_with_retry(
-        self, capability_name: str, parameters: dict, step_index: int
-    ) -> bool:
+    def _execute_step(
+        self, capability_name: str, parameters: dict
+    ) -> tuple:
         """
-        Execute a single step, retrying on failure up to step_max_retries times.
-        Returns True on success, False if all attempts fail.
-        """
-        attempts = self._step_max_retries + 1   # first attempt + retries
-
-        for attempt in range(1, attempts + 1):
-            try:
-                success = self._execute_step(capability_name, parameters)
-                if success:
-                    if attempt > 1:
-                        self.get_logger().info(
-                            f"  Step '{capability_name}' succeeded on attempt {attempt}."
-                        )
-                    return True
-                else:
-                    raise RuntimeError("Step returned failure.")
-
-            except Exception as e:
-                if attempt < attempts:
-                    self.get_logger().warn(
-                        f"  Step '{capability_name}' failed (attempt {attempt}/{attempts}): {e}. "
-                        f"Retrying..."
-                    )
-                    time.sleep(1.0 * attempt)   # simple linear backoff
-                else:
-                    self.get_logger().error(
-                        f"  Step '{capability_name}' failed after {attempts} attempt(s): {e}"
-                    )
-                    return False
-
-        return False
-
-    def _execute_step(self, capability_name: str, parameters: dict) -> bool:
-        """
-        Route to _call_action or _call_service based on capability definition.
-        Returns True on success.
+        Route a single step to the appropriate dispatch level.
+        Returns (success: bool, state_set: list, state_clear: list).
         """
         cap = self._capability_map.get(capability_name)
+
+        # ── Level 2: DispatchConfig ──────────────────────────────────
+        if self._dispatch_config and self._dispatch_config.has(capability_name):
+            return self._dispatch_via_config(capability_name, parameters)
+
+        # ── Level 1 / Level 3: Route via capability interface type ───
         if cap is None:
             self.get_logger().error(
-                f"Cannot execute '{capability_name}': not in capability cache. "
-                "Waiting for GroundingNode broadcast..."
+                f"Capability '{capability_name}' not in cache. "
+                "Is the GroundingNode broadcasting capabilities?"
             )
-            # Give the broadcast a moment to arrive and retry lookup
-            time.sleep(1.0)
-            cap = self._capability_map.get(capability_name)
-            if cap is None:
-                return False
+            return False, [], []
 
         ros_action  = cap.get("ros_action")
         ros_service = cap.get("ros_service")
+        postconditions = cap.get("postconditions", [])
 
         if ros_action:
-            return self._call_action(ros_action, capability_name, parameters)
+            success = self._call_action(ros_action, capability_name, parameters)
+            if success:
+                return True, postconditions, []
+            return False, [], []
+
         elif ros_service:
-            return self._call_service(ros_service, capability_name, parameters)
-        else:
+            success = self._call_service(ros_service, capability_name, parameters)
+            if success:
+                return True, postconditions, []
+            return False, [], []
+
+        self.get_logger().error(
+            f"Capability '{capability_name}' has no ros_action or ros_service."
+        )
+        return False, [], []
+
+    # ------------------------------------------------------------------
+    # Level 1 — LinguaAction protocol
+    # ------------------------------------------------------------------
+
+    def _call_action(
+        self, action_name: str, cap_name: str, params: dict
+    ) -> bool:
+        """
+        Call a ROS 2 action.
+
+        If the action server implements the generic LinguaAction protocol,
+        the goal is sent automatically. Otherwise falls back to demo mode
+        unless overridden by a subclass (Level 3).
+        """
+        try:
+            from ros2_lingua_interfaces.action import LinguaAction
+            lingua_action_available = True
+        except ImportError:
+            lingua_action_available = False
+
+        if lingua_action_available:
+            return self._call_lingua_action(action_name, cap_name, params)
+
+        # Level 3 fallback (subclass override)
+        return self._call_action_typed(action_name, cap_name, params)
+
+    def _call_lingua_action(
+        self, action_name: str, cap_name: str, params: dict
+    ) -> bool:
+        """Send a LinguaAction goal to the action server."""
+        from ros2_lingua_interfaces.action import LinguaAction
+
+        if action_name not in self._action_clients:
+            self._action_clients[action_name] = ActionClient(
+                self, LinguaAction, action_name,
+                callback_group=self._callback_group,
+            )
+
+        client = self._action_clients[action_name]
+
+        if not client.wait_for_server(timeout_sec=5.0):
+            self.get_logger().warn(
+                f"Action server '{action_name}' not available within 5s. "
+                f"Trying demo mode."
+            )
+            return self._call_action_demo(action_name, cap_name, params)
+
+        goal = LinguaAction.Goal()
+        goal.capability_name  = cap_name
+        goal.parameters_json  = json.dumps(params)
+
+        self.get_logger().info(
+            f"  → LinguaAction '{action_name}' | {cap_name} | {params}"
+        )
+
+        future = client.send_goal_async(goal)
+        rclpy.spin_until_future_complete(
+            self, future, timeout_sec=self._step_timeout
+        )
+
+        if future.result() is None:
+            self.get_logger().error(f"Goal rejected by '{action_name}'")
+            return False
+
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().error(f"Goal rejected by '{action_name}'")
+            return False
+
+        result_future = goal_handle.get_result_async()
+        rclpy.spin_until_future_complete(
+            self, result_future, timeout_sec=self._step_timeout
+        )
+
+        if result_future.result() is None:
             self.get_logger().error(
-                f"Capability '{capability_name}' has no ros_action or ros_service."
+                f"Action '{action_name}' timed out after {self._step_timeout}s"
             )
             return False
 
-    def _call_action(self, action_name: str, cap_name: str, params: dict) -> bool:
+        result = result_future.result().result
+        if not result.success:
+            self.get_logger().error(
+                f"Action '{action_name}' failed: {result.message}"
+            )
+
+        # Apply state updates from result
+        if result.state_set or result.state_clear:
+            self._update_state(
+                list(result.state_set), list(result.state_clear)
+            )
+
+        return result.success
+
+    def _call_service(
+        self, service_name: str, cap_name: str, params: dict
+    ) -> bool:
         """
-        Call a ROS 2 action. Override this in a robot-specific subclass
-        to send real typed action goals.
+        Call a ROS 2 service.
+
+        Tries the generic LinguaService protocol first, then falls back
+        to demo mode (or subclass override).
         """
+        try:
+            from ros2_lingua_interfaces.srv import LinguaService
+            lingua_svc_available = True
+        except ImportError:
+            lingua_svc_available = False
+
+        if lingua_svc_available:
+            return self._call_lingua_service(service_name, cap_name, params)
+
+        return self._call_service_typed(service_name, cap_name, params)
+
+    def _call_lingua_service(
+        self, service_name: str, cap_name: str, params: dict
+    ) -> bool:
+        """Send a LinguaService request."""
+        from ros2_lingua_interfaces.srv import LinguaService
+
+        client = self.create_client(
+            LinguaService, service_name,
+            callback_group=self._callback_group,
+        )
+
+        if not client.wait_for_service(timeout_sec=5.0):
+            self.get_logger().warn(
+                f"Service '{service_name}' not available. Using demo mode."
+            )
+            return self._call_service_demo(service_name, cap_name, params)
+
+        request = LinguaService.Request()
+        request.capability_name = cap_name
+        request.parameters_json = json.dumps(params)
+
         self.get_logger().info(
-            f"  -> Action '{action_name}' | params: {params}"
+            f"  → LinguaService '{service_name}' | {cap_name} | {params}"
+        )
+
+        future = client.call_async(request)
+        rclpy.spin_until_future_complete(
+            self, future, timeout_sec=self._step_timeout
+        )
+
+        if future.result() is None:
+            self.get_logger().error(f"Service '{service_name}' timed out.")
+            return False
+
+        result = future.result()
+        if result.state_set or result.state_clear:
+            self._update_state(list(result.state_set), list(result.state_clear))
+
+        return result.success
+
+    # ------------------------------------------------------------------
+    # Level 2 — DispatchConfig
+    # ------------------------------------------------------------------
+
+    def _dispatch_via_config(
+        self, capability_name: str, parameters: dict
+    ) -> tuple:
+        """Dispatch using a registered DispatchConfig mapping."""
+        config = self._dispatch_config
+
+        action_mapping = config.get_action(capability_name)
+        if action_mapping:
+            return self._call_typed_action(action_mapping, parameters)
+
+        service_mapping = config.get_service(capability_name)
+        if service_mapping:
+            return self._call_typed_service(service_mapping, parameters)
+
+        return False, [], []
+
+    def _call_typed_action(self, mapping, parameters: dict) -> tuple:
+        """Call a typed action via a DispatchConfig ActionMapping."""
+        key = f"{mapping.action_name}::{mapping.action_type.__name__}"
+        if key not in self._action_clients:
+            self._action_clients[key] = ActionClient(
+                self, mapping.action_type, mapping.action_name,
+                callback_group=self._callback_group,
+            )
+
+        client = self._action_clients[key]
+        if not client.wait_for_server(timeout_sec=5.0):
+            self.get_logger().error(
+                f"Action server '{mapping.action_name}' not available."
+            )
+            return False, [], []
+
+        try:
+            goal = mapping.goal_adapter(parameters)
+        except Exception as e:
+            self.get_logger().error(
+                f"goal_adapter for '{mapping.capability_name}' raised: {e}"
+            )
+            return False, [], []
+
+        self.get_logger().info(
+            f"  → Config action '{mapping.action_name}' ({mapping.capability_name})"
+        )
+
+        future = client.send_goal_async(goal)
+        rclpy.spin_until_future_complete(
+            self, future, timeout_sec=mapping.timeout_sec
+        )
+
+        if future.result() is None or not future.result().accepted:
+            return False, [], []
+
+        result_future = future.result().get_result_async()
+        rclpy.spin_until_future_complete(
+            self, result_future, timeout_sec=mapping.timeout_sec
+        )
+
+        if result_future.result() is None:
+            self.get_logger().error(
+                f"Action '{mapping.action_name}' timed out."
+            )
+            return False, [], []
+
+        result = result_future.result().result
+        success = True
+        if mapping.result_checker:
+            success = mapping.result_checker(result)
+
+        cap = self._capability_map.get(mapping.capability_name, {})
+        postconditions = cap.get("postconditions", []) if success else []
+        return success, postconditions, []
+
+    def _call_typed_service(self, mapping, parameters: dict) -> tuple:
+        """Call a typed service via a DispatchConfig ServiceMapping."""
+        client = self.create_client(
+            mapping.service_type, mapping.service_name,
+            callback_group=self._callback_group,
+        )
+        if not client.wait_for_service(timeout_sec=5.0):
+            self.get_logger().error(
+                f"Service '{mapping.service_name}' not available."
+            )
+            return False, [], []
+
+        try:
+            request = mapping.request_adapter(parameters)
+        except Exception as e:
+            self.get_logger().error(
+                f"request_adapter for '{mapping.capability_name}' raised: {e}"
+            )
+            return False, [], []
+
+        future = client.call_async(request)
+        rclpy.spin_until_future_complete(
+            self, future, timeout_sec=mapping.timeout_sec
+        )
+
+        if future.result() is None:
+            return False, [], []
+
+        result = future.result()
+        success = True
+        if mapping.result_checker:
+            success = mapping.result_checker(result)
+
+        cap = self._capability_map.get(mapping.capability_name, {})
+        postconditions = cap.get("postconditions", []) if success else []
+        return success, postconditions, []
+
+    # ------------------------------------------------------------------
+    # Level 3 — Override these in subclasses
+    # ------------------------------------------------------------------
+
+    def _call_action_typed(
+        self, action_name: str, cap_name: str, params: dict
+    ) -> bool:
+        """
+        Override this in a subclass to call typed actions on existing robots.
+        Called when no LinguaAction server is available and no DispatchConfig.
+        """
+        return self._call_action_demo(action_name, cap_name, params)
+
+    def _call_service_typed(
+        self, service_name: str, cap_name: str, params: dict
+    ) -> bool:
+        """Override this in a subclass to call typed services."""
+        return self._call_service_demo(service_name, cap_name, params)
+
+    # ------------------------------------------------------------------
+    # Demo mode (when nothing else is available)
+    # ------------------------------------------------------------------
+
+    def _call_action_demo(
+        self, action_name: str, cap_name: str, params: dict
+    ) -> bool:
+        self.get_logger().info(
+            f"  → [DEMO] action '{action_name}' | {cap_name} | {params}"
         )
         self.get_logger().warn(
-            f"  [DEMO MODE] Subclass _call_action() for real execution."
+            f"  Running in demo mode. For real execution either:\n"
+            f"  1. Implement LinguaActionServer on your node\n"
+            f"  2. Use DispatchConfig to map to your existing interfaces\n"
+            f"  3. Subclass DispatcherNode and override _call_action_typed()"
         )
         return True
 
-    def _call_service(self, service_name: str, cap_name: str, params: dict) -> bool:
-        """
-        Call a ROS 2 service. Override in a robot-specific subclass.
-        """
+    def _call_service_demo(
+        self, service_name: str, cap_name: str, params: dict
+    ) -> bool:
         self.get_logger().info(
-            f"  -> Service '{service_name}' | params: {params}"
-        )
-        self.get_logger().warn(
-            f"  [DEMO MODE] Subclass _call_service() for real execution."
+            f"  → [DEMO] service '{service_name}' | {cap_name} | {params}"
         )
         return True
 
     # ------------------------------------------------------------------
-    # Status publishing
+    # Helpers
     # ------------------------------------------------------------------
 
-    def _publish_status(self, status: str, step: str = "", instruction: str = ""):
-        msg             = ExecutionStatus()
-        msg.status      = status
+    def _update_state(self, set_tokens: list, clear_tokens: list) -> None:
+        """Push state token updates back to the GroundingNode."""
+        if not self._state_client.wait_for_service(timeout_sec=2.0):
+            return
+        req = UpdateState.Request()
+        req.state_json = json.dumps({
+            "set": set_tokens, "clear": clear_tokens
+        })
+        future = self._state_client.call_async(req)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=3.0)
+
+    def _publish_status(
+        self, status: str, step: str = "", instruction: str = ""
+    ) -> None:
+        msg = ExecutionStatus()
+        msg.status       = status
         msg.current_step = step
-        msg.instruction = instruction
+        msg.instruction  = instruction
         self._status_pub.publish(msg)
 
 
@@ -250,7 +542,10 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

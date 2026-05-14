@@ -1,0 +1,41 @@
+# LinguaAction.action
+# Generic action interface for ros2_lingua.
+#
+# Any ROS 2 node that implements this action server is immediately
+# compatible with the ros2_lingua dispatcher — no subclassing needed.
+#
+# The capability_name and parameters_json fields carry the full
+# context of what the dispatcher is requesting. The action server
+# unpacks the JSON and calls its own internal logic.
+#
+# Example goal:
+#   capability_name: "navigate_to_location"
+#   parameters_json: '{"location_name": "table", "speed": 0.5}'
+#
+# Example result (success):
+#   success: true
+#   message: "Arrived at table"
+#   state_set: ["robot_at_location"]
+#   state_clear: []
+#
+# Example result (failure):
+#   success: false
+#   message: "Path planning failed: no valid path found"
+#   state_set: []
+#   state_clear: ["robot_at_location"]
+
+# ── Goal ──────────────────────────────────────────────────────
+string capability_name
+string parameters_json
+---
+# ── Result ────────────────────────────────────────────────────
+bool success
+string message
+# State tokens to set/clear after execution
+# The dispatcher uses these to update /lingua/update_state automatically
+string[] state_set
+string[] state_clear
+---
+# ── Feedback ──────────────────────────────────────────────────
+string status
+float32 progress

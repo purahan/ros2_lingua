@@ -16,7 +16,8 @@ Hierarchy:
     │   └── LLMModelNotFoundError   (model doesn't exist)
     ├── GroundingError              (grounding engine logic failed)
     │   ├── HallucinationError      (LLM referenced unknown capability)
-    │   └── InfeasibleError         (instruction cannot be executed)
+    │   ├── InfeasibleError         (instruction cannot be executed)
+    │   └── ParameterValidationError (LLM returned bad parameter values)
     └── PlanningError               (backward chaining failed)
         ├── UnsatisfiablePreconditionError
         └── CircularDependencyError
@@ -69,6 +70,33 @@ class InfeasibleError(GroundingError):
     def __init__(self, reason: str):
         self.reason = reason
         super().__init__(f"Instruction is not feasible: {reason}")
+
+
+class ParameterValidationError(GroundingError):
+    """
+    Raised when one or more parameters in an LLM-generated step
+    fail validation against the capability's schema.
+
+    Contains a list of all validation failures so the caller gets
+    the full picture in one error rather than failing one at a time.
+
+    Example:
+        ParameterValidationError(
+            capability_name="navigate_to_location",
+            failures=[
+                "speed: expected float, got str ('fast')",
+                "location_name: required parameter is missing",
+            ]
+        )
+    """
+    def __init__(self, capability_name: str, failures: list):
+        self.capability_name = capability_name
+        self.failures = failures
+        failures_str = "\n  ".join(failures)
+        super().__init__(
+            f"Parameter validation failed for '{capability_name}':\n"
+            f"  {failures_str}"
+        )
 
 
 # --- Planning Errors ---

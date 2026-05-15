@@ -2,10 +2,11 @@ from .schema import Capability, CapabilityParameter, Tags
 from .registry import CapabilityRegistry
 from .grounding import GroundingEngine, ActionPlan, ActionStep, LLMBackend
 from .backends import OpenAIBackend, AnthropicBackend, OllamaBackend, MockBackend, RetryConfig
+from .validator import ParameterValidator, validate_parameters
 from .errors import (
     LinguaError,
     LLMBackendError, LLMTimeoutError, LLMRateLimitError, LLMModelNotFoundError,
-    GroundingError, HallucinationError, InfeasibleError,
+    GroundingError, HallucinationError, InfeasibleError, ParameterValidationError,
     PlanningError, UnsatisfiablePreconditionError, CircularDependencyError,
     DispatchError, StepTimeoutError, StepFailedError,
 )
@@ -18,9 +19,10 @@ __all__ = [
     "CapabilityRegistry",
     "GroundingEngine", "ActionPlan", "ActionStep", "LLMBackend",
     "OpenAIBackend", "AnthropicBackend", "OllamaBackend", "MockBackend", "RetryConfig",
+    "ParameterValidator", "validate_parameters",
     "LinguaError",
     "LLMBackendError", "LLMTimeoutError", "LLMRateLimitError", "LLMModelNotFoundError",
-    "GroundingError", "HallucinationError", "InfeasibleError",
+    "GroundingError", "HallucinationError", "InfeasibleError", "ParameterValidationError",
     "PlanningError", "UnsatisfiablePreconditionError", "CircularDependencyError",
     "DispatchError", "StepTimeoutError", "StepFailedError",
 ]

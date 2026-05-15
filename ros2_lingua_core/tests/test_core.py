@@ -580,3 +580,224 @@ class TestRobustness:
                                   max_retries=5, retry_delay=0.1, retry_backoff=1.5)
         plan = engine.ground("do nav")
         assert plan.feasible
+
+
+# ------------------------------------------------------------------
+# Parameter validation tests
+# ------------------------------------------------------------------
+
+class TestParameterValidation:
+    """Tests for ParameterValidator and its integration into GroundingEngine."""
+
+    def _make_cap(self, params):
+        return Capability(
+            name="test_cap", description="d", ros_action="a/b",
+            parameters=params,
+        )
+
+    # ── Type coercion ──────────────────────────────────────────
+
+    def test_string_coercion(self):
+        from ros2_lingua_core import ParameterValidator
+        cap = self._make_cap([CapabilityParameter("name", "string", "a name")])
+        result = ParameterValidator().validate(cap, {"name": 42})
+        assert result["name"] == "42"
+
+    def test_float_from_int(self):
+        from ros2_lingua_core import ParameterValidator
+        cap = self._make_cap([CapabilityParameter("speed", "float", "speed")])
+        result = ParameterValidator().validate(cap, {"speed": 1})
+        assert result["speed"] == 1.0
+        assert isinstance(result["speed"], float)
+
+    def test_float_from_string(self):
+        from ros2_lingua_core import ParameterValidator
+        cap = self._make_cap([CapabilityParameter("speed", "float", "speed")])
+        result = ParameterValidator().validate(cap, {"speed": "0.5"})
+        assert result["speed"] == 0.5
+
+    def test_float_invalid_string_fails(self):
+        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        cap = self._make_cap([CapabilityParameter("speed", "float", "speed")])
+        with pytest.raises(ParameterValidationError) as exc_info:
+            ParameterValidator().validate(cap, {"speed": "fast"})
+        assert "speed" in str(exc_info.value)
+        assert "fast" in str(exc_info.value)
+
+    def test_int_from_float_whole_number(self):
+        from ros2_lingua_core import ParameterValidator
+        cap = self._make_cap([CapabilityParameter("count", "int", "count")])
+        result = ParameterValidator().validate(cap, {"count": 3.0})
+        assert result["count"] == 3
+        assert isinstance(result["count"], int)
+
+    def test_int_from_fractional_float_fails(self):
+        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        cap = self._make_cap([CapabilityParameter("count", "int", "count")])
+        with pytest.raises(ParameterValidationError):
+            ParameterValidator().validate(cap, {"count": 3.5})
+
+    def test_int_from_string(self):
+        from ros2_lingua_core import ParameterValidator
+        cap = self._make_cap([CapabilityParameter("count", "integer", "count")])
+        result = ParameterValidator().validate(cap, {"count": "5"})
+        assert result["count"] == 5
+
+    def test_bool_from_string_true(self):
+        from ros2_lingua_core import ParameterValidator
+        cap = self._make_cap([CapabilityParameter("enabled", "bool", "flag")])
+        for val in ["true", "True", "TRUE", "1", "yes"]:
+            result = ParameterValidator().validate(cap, {"enabled": val})
+            assert result["enabled"] is True, f"Failed for: {val}"
+
+    def test_bool_from_string_false(self):
+        from ros2_lingua_core import ParameterValidator
+        cap = self._make_cap([CapabilityParameter("enabled", "bool", "flag")])
+        for val in ["false", "False", "FALSE", "0", "no"]:
+            result = ParameterValidator().validate(cap, {"enabled": val})
+            assert result["enabled"] is False, f"Failed for: {val}"
+
+    def test_bool_invalid_string_fails(self):
+        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        cap = self._make_cap([CapabilityParameter("enabled", "boolean", "flag")])
+        with pytest.raises(ParameterValidationError):
+            ParameterValidator().validate(cap, {"enabled": "maybe"})
+
+    def test_list_from_json_string(self):
+        from ros2_lingua_core import ParameterValidator
+        cap = self._make_cap([CapabilityParameter("items", "list", "items")])
+        result = ParameterValidator().validate(cap, {"items": '["a", "b", "c"]'})
+        assert result["items"] == ["a", "b", "c"]
+
+    def test_list_invalid_json_fails(self):
+        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        cap = self._make_cap([CapabilityParameter("items", "list", "items")])
+        with pytest.raises(ParameterValidationError):
+            ParameterValidator().validate(cap, {"items": "not json"})
+
+    # ── Required / optional parameters ────────────────────────
+
+    def test_missing_required_fails(self):
+        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        cap = self._make_cap([CapabilityParameter("loc", "string", "location", required=True)])
+        with pytest.raises(ParameterValidationError) as exc_info:
+            ParameterValidator().validate(cap, {})
+        assert "required" in str(exc_info.value)
+
+    def test_missing_optional_uses_default(self):
+        from ros2_lingua_core import ParameterValidator
+        cap = self._make_cap([
+            CapabilityParameter("speed", "float", "speed", required=False, default=0.5)
+        ])
+        result = ParameterValidator().validate(cap, {})
+        assert result["speed"] == 0.5
+
+    def test_all_failures_reported_at_once(self):
+        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        cap = self._make_cap([
+            CapabilityParameter("speed",  "float",  "speed",  required=True),
+            CapabilityParameter("name",   "string", "name",   required=True),
+            CapabilityParameter("count",  "int",    "count",  required=True),
+        ])
+        with pytest.raises(ParameterValidationError) as exc_info:
+            # speed is wrong type, name missing, count wrong type
+            ParameterValidator().validate(cap, {"speed": "fast", "count": "three"})
+        error_msg = str(exc_info.value)
+        assert "speed" in error_msg
+        assert "name" in error_msg
+        assert "count" in error_msg
+
+    # ── ROS message types pass through ────────────────────────
+
+    def test_ros_message_type_passes_through(self):
+        from ros2_lingua_core import ParameterValidator
+        cap = self._make_cap([
+            CapabilityParameter("pose", "geometry_msgs/Pose", "target pose")
+        ])
+        pose_val = {"position": {"x": 1.0}, "orientation": {"w": 1.0}}
+        result = ParameterValidator().validate(cap, {"pose": pose_val})
+        assert result["pose"] == pose_val
+
+    # ── Strict mode ────────────────────────────────────────────
+
+    def test_strict_mode_rejects_unknown_params(self):
+        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        cap = self._make_cap([CapabilityParameter("name", "string", "name")])
+        with pytest.raises(ParameterValidationError):
+            ParameterValidator().validate(
+                cap, {"name": "table", "unknown_extra": "value"}, strict=True
+            )
+
+    def test_non_strict_mode_passes_unknown_params(self):
+        from ros2_lingua_core import ParameterValidator
+        cap = self._make_cap([CapabilityParameter("name", "string", "name")])
+        result = ParameterValidator().validate(
+            cap, {"name": "table", "extra": "value"}, strict=False
+        )
+        assert result["name"] == "table"
+        assert result["extra"] == "value"
+
+    # ── Integration with GroundingEngine ──────────────────────
+
+    def test_grounding_engine_validates_params(self):
+        import json
+        r = CapabilityRegistry()
+        r.register(Capability(
+            name="navigate_to_location", description="d", ros_action="a/n",
+            parameters=[
+                CapabilityParameter("location_name", "string", "where", required=True),
+                CapabilityParameter("speed", "float", "how fast", required=False, default=0.5),
+            ],
+        ))
+        mock_response = json.dumps({
+            "feasible": True, "reason": "", "steps": [{
+                "capability_name": "navigate_to_location",
+                "parameters": {"location_name": "table", "speed": "fast"},
+                "rationale": "go",
+            }]
+        })
+        engine = GroundingEngine(r, MockBackend(mock_response), auto_chain=False, validate_params=True)
+        plan = engine.ground("go to table")
+        assert not plan.feasible
+        assert "speed" in plan.reason and "fast" in plan.reason
+
+    def test_grounding_engine_coerces_valid_params(self):
+        import json
+        r = CapabilityRegistry()
+        r.register(Capability(
+            name="navigate_to_location", description="d", ros_action="a/n",
+            parameters=[
+                CapabilityParameter("location_name", "string", "where", required=True),
+                CapabilityParameter("speed", "float", "how fast", required=False, default=0.5),
+            ],
+        ))
+        mock_response = json.dumps({
+            "feasible": True, "reason": "", "steps": [{
+                "capability_name": "navigate_to_location",
+                "parameters": {"location_name": "table", "speed": "0.5"},
+                "rationale": "go",
+            }]
+        })
+        engine = GroundingEngine(r, MockBackend(mock_response), auto_chain=False, validate_params=True)
+        plan = engine.ground("go to table")
+        assert plan.feasible
+        assert plan.steps[0].parameters["speed"] == 0.5
+        assert isinstance(plan.steps[0].parameters["speed"], float)
+
+    def test_grounding_engine_validation_disabled(self, registry):
+        import json
+        mock_response = json.dumps({
+            "feasible": True, "reason": "", "steps": [{
+                "capability_name": "navigate_to_location",
+                "parameters": {"location_name": "table", "speed": "fast"},
+                "rationale": "go",
+            }]
+        })
+        engine = GroundingEngine(
+            registry, MockBackend(mock_response),
+            auto_chain=False, validate_params=False
+        )
+        plan = engine.ground("go to table")
+        # With validation off, bad types pass through
+        assert plan.feasible
+        assert plan.steps[0].parameters["speed"] == "fast"

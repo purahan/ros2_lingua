@@ -27,7 +27,9 @@ from .errors import (
     LLMTimeoutError,
     HallucinationError,
     GroundingError,
+    ParameterValidationError,
 )
+from .validator import ParameterValidator
 
 logger = logging.getLogger(__name__)
 
@@ -161,27 +163,32 @@ class GroundingEngine:
         max_retries: int = 3,
         retry_delay: float = 1.0,
         retry_backoff: float = 2.0,
+        validate_params: bool = True,
+        strict_params: bool = False,
     ):
         """
         Args:
-            registry: The CapabilityRegistry with all registered capabilities
-            backend: Any object implementing the LLMBackend protocol
-            auto_chain: If True, automatically resolve and prepend prerequisite
-                        capabilities before the LLM-chosen ones. Default True.
-            max_retries: Maximum number of LLM call attempts before giving up.
-                         Default 3. Set to 1 to disable retries.
-            retry_delay: Initial delay in seconds between retry attempts.
-                         Default 1.0s.
-            retry_backoff: Multiplier applied to retry_delay after each attempt.
-                           Default 2.0 (exponential backoff).
-                           e.g. delays will be: 1s, 2s, 4s
+            registry:        The CapabilityRegistry with all registered capabilities
+            backend:         Any object implementing the LLMBackend protocol
+            auto_chain:      Insert missing prerequisites automatically. Default True.
+            max_retries:     Maximum LLM call attempts before giving up. Default 3.
+            retry_delay:     Initial delay between retries in seconds. Default 1.0.
+            retry_backoff:   Multiply retry_delay by this each attempt. Default 2.0.
+            validate_params: Validate and coerce LLM parameter values against the
+                             capability schema before returning the plan. Default True.
+                             Catches type errors (e.g. speed="fast") before dispatch.
+            strict_params:   If True, reject unknown parameters in LLM responses.
+                             If False (default), pass unknown params through unchanged.
         """
-        self._registry = registry
-        self._backend = backend
-        self._auto_chain = auto_chain
-        self._max_retries = max_retries
-        self._retry_delay = retry_delay
-        self._retry_backoff = retry_backoff
+        self._registry        = registry
+        self._backend         = backend
+        self._auto_chain      = auto_chain
+        self._max_retries     = max_retries
+        self._retry_delay     = retry_delay
+        self._retry_backoff   = retry_backoff
+        self._validate_params = validate_params
+        self._strict_params   = strict_params
+        self._validator       = ParameterValidator() if validate_params else None
 
     def ground(self, instruction: str, tag_filter: Optional[List[str]] = None) -> ActionPlan:
         """
@@ -317,6 +324,40 @@ class GroundingEngine:
                     rationale=step_data.get("rationale", ""),
                 )
             )
+
+        # Parameter validation — coerce types and check required fields
+        if self._validator and steps and feasible:
+            validated_steps = []
+            validation_failures = []
+
+            for step in steps:
+                cap = self._registry.get(step.capability_name)
+                if cap is None or not cap.parameters:
+                    validated_steps.append(step)
+                    continue
+                try:
+                    coerced = self._validator.validate(
+                        cap, step.parameters, strict=self._strict_params
+                    )
+                    validated_steps.append(ActionStep(
+                        capability_name=step.capability_name,
+                        parameters=coerced,
+                        rationale=step.rationale,
+                    ))
+                except ParameterValidationError as e:
+                    validation_failures.append(str(e))
+
+            if validation_failures:
+                return ActionPlan(
+                    steps=[],
+                    original_instruction=instruction,
+                    feasible=False,
+                    reason=(
+                        "Parameter validation failed:\n" +
+                        "\n".join(validation_failures)
+                    ),
+                )
+            steps = validated_steps
 
         return ActionPlan(
             steps=steps,

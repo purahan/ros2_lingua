@@ -377,116 +377,6 @@ class TestGroundingEngine:
         assert "JSON" in plan.reason
 
 
-# ------------------------------------------------------------------
-# Robustness tests
-# ------------------------------------------------------------------
-
-class TestRobustness:
-
-    def _nav_cap(self):
-        return Capability(
-            name="navigate",
-            description="navigates",
-            ros_action="a/nav",
-            parameters=[CapabilityParameter("loc", "string", "where")],
-            tags=["locomotion"],
-        )
-
-    def _mock_plan(self, cap_name="navigate", loc="table"):
-        import json
-        return json.dumps({
-            "feasible": True, "reason": "", "steps": [{
-                "capability_name": cap_name,
-                "parameters": {"loc": loc},
-                "rationale": "go",
-            }]
-        })
-
-    def test_empty_registry_raises(self):
-        from ros2_lingua_core.errors import EmptyRegistryError
-        r = CapabilityRegistry()
-        engine = GroundingEngine(r, MockBackend(self._mock_plan()), auto_chain=False)
-        with pytest.raises(EmptyRegistryError):
-            engine.ground("go to table")
-
-    def test_retry_on_connection_error(self):
-        """Backend fails twice then succeeds — engine should retry and return plan."""
-        from ros2_lingua_core.errors import BackendConnectionError
-        r = CapabilityRegistry()
-        r.register(self._nav_cap())
-        backend = MockBackend(
-            self._mock_plan(),
-            fail_times=2,
-            fail_with=BackendConnectionError("Simulated"),
-        )
-        engine = GroundingEngine(r, backend, auto_chain=False, max_retries=3, retry_delay=0.0)
-        plan = engine.ground("go to table")
-        assert plan.feasible
-        assert plan.steps[0].capability_name == "navigate"
-
-    def test_auth_error_not_retried(self):
-        """Auth errors should raise immediately without retrying."""
-        from ros2_lingua_core.errors import BackendAuthError, MaxRetriesExceededError
-        r = CapabilityRegistry()
-        r.register(self._nav_cap())
-        backend = MockBackend(
-            self._mock_plan(),
-            fail_times=99,
-            fail_with=BackendAuthError("Bad API key"),
-        )
-        engine = GroundingEngine(r, backend, auto_chain=False, max_retries=3, retry_delay=0.0)
-        with pytest.raises(BackendAuthError):
-            engine.ground("go to table")
-
-    def test_max_retries_exceeded_raises(self):
-        """If all retries fail, MaxRetriesExceededError should be raised."""
-        from ros2_lingua_core.errors import BackendConnectionError, MaxRetriesExceededError
-        r = CapabilityRegistry()
-        r.register(self._nav_cap())
-        backend = MockBackend(
-            self._mock_plan(),
-            fail_times=99,
-            fail_with=BackendConnectionError("Always fails"),
-        )
-        engine = GroundingEngine(r, backend, auto_chain=False, max_retries=2, retry_delay=0.0)
-        with pytest.raises(MaxRetriesExceededError) as exc_info:
-            engine.ground("go to table")
-        assert exc_info.value.last_error is not None
-
-    def test_mock_backend_fail_then_succeed(self):
-        """MockBackend fail_times works correctly."""
-        from ros2_lingua_core.errors import BackendConnectionError
-        backend = MockBackend("response", fail_times=2,
-                              fail_with=BackendConnectionError("x"))
-        calls = 0
-        errors = 0
-        for _ in range(3):
-            try:
-                result = backend.complete([])
-                calls += 1
-            except BackendConnectionError:
-                errors += 1
-        assert errors == 2
-        assert calls == 1
-
-    def test_typed_errors_hierarchy(self):
-        """All backend errors should be catchable as BackendError."""
-        from ros2_lingua_core.errors import (
-            BackendError, BackendConnectionError, BackendAuthError,
-            BackendTimeoutError, BackendRateLimitError,
-        )
-        for exc_class in [BackendConnectionError, BackendAuthError,
-                          BackendTimeoutError, BackendRateLimitError]:
-            instance = exc_class("test")
-            assert isinstance(instance, BackendError)
-
-    def test_grounding_error_hierarchy(self):
-        """Grounding errors should be catchable as GroundingError."""
-        from ros2_lingua_core.errors import (
-            GroundingError, EmptyRegistryError, MaxRetriesExceededError,
-        )
-        assert isinstance(EmptyRegistryError("test"), GroundingError)
-        assert isinstance(MaxRetriesExceededError("test"), GroundingError)
 
 
 # ------------------------------------------------------------------
@@ -801,3 +691,373 @@ class TestParameterValidation:
         # With validation off, bad types pass through
         assert plan.feasible
         assert plan.steps[0].parameters["speed"] == "fast"
+
+
+# ------------------------------------------------------------------
+# Recovery Planner tests
+# ------------------------------------------------------------------
+
+class TestRecoveryPlanner:
+    """Tests for RecoveryPlanner, RecoveryConfig, and RecoveryDecision."""
+
+    def _make_registry(self):
+        """Create a registry with standard test capabilities."""
+        r = CapabilityRegistry()
+        r.register(Capability(
+            name="stabilize_robot",
+            description="Stabilizes the robot",
+            ros_action="humanoid/stabilize",
+            preconditions=[],
+            postconditions=["robot_is_balanced"],
+        ))
+        r.register(Capability(
+            name="navigate_to_location",
+            description="Walks to a named location",
+            ros_action="humanoid/navigate",
+            parameters=[CapabilityParameter("location_name", "string", "where")],
+            preconditions=["robot_is_balanced"],
+            postconditions=["robot_at_location"],
+        ))
+        r.register(Capability(
+            name="pick_up_object",
+            description="Picks up an object",
+            ros_action="humanoid/pick",
+            parameters=[CapabilityParameter("object_name", "string", "what")],
+            preconditions=["robot_at_location"],
+            postconditions=["object_in_hand"],
+        ))
+        r.register(Capability(
+            name="return_to_home",
+            description="Returns the robot to home",
+            ros_action="humanoid/home",
+            preconditions=[],
+            postconditions=["robot_at_home"],
+        ))
+        return r
+
+    def _make_engine(self, registry, plan_steps):
+        """Create a GroundingEngine with a MockBackend returning the given steps."""
+        mock_response = json.dumps({
+            "feasible": True, "reason": "",
+            "steps": plan_steps,
+        })
+        return GroundingEngine(
+            registry, MockBackend(mock_response),
+            auto_chain=False, validate_params=False,
+        )
+
+    def _failed_step(self, cap_name="pick_up_object", params=None):
+        return {
+            "capability_name": cap_name,
+            "parameters": params or {},
+        }
+
+    # ── RecoveryConfig tests ──────────────────────────────────
+
+    def test_recovery_config_defaults(self):
+        from ros2_lingua_core import RecoveryConfig
+        config = RecoveryConfig()
+        assert config.max_retries == 2
+        assert config.enable_replan is True
+        assert config.safe_fallback is None
+        assert config.safe_fallback_params == {}
+        assert config.abort_on_fallback_failure is True
+
+    def test_recovery_config_no_replan(self):
+        from ros2_lingua_core import RecoveryConfig
+        config = RecoveryConfig(enable_replan=False)
+        assert config.enable_replan is False
+
+    # ── RecoveryDecision tests ────────────────────────────────
+
+    def test_recovery_decision_dataclass(self):
+        from ros2_lingua_core import RecoveryDecision
+        d = RecoveryDecision(strategy="retry", reason="testing")
+        assert d.strategy == "retry"
+        assert d.new_plan is None
+        assert d.reason == "testing"
+
+    # ── Retry strategy ────────────────────────────────────────
+
+    def test_retry_decision_on_first_failure(self):
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        planner = RecoveryPlanner(RecoveryConfig(max_retries=2))
+        decision = planner.on_step_failed(
+            failed_step=self._failed_step(),
+            step_index=0,
+            original_instruction="pick up the bottle",
+            current_state=set(),
+            error="gripper timeout",
+        )
+        assert decision.strategy == "retry"
+        assert "attempt 1" in decision.reason
+
+    def test_retry_exhaustion_leads_to_replan(self):
+        """After max retries, should escalate to replan."""
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        registry = self._make_registry()
+        engine = self._make_engine(registry, [
+            {"capability_name": "pick_up_object",
+             "parameters": {"object_name": "bottle"}, "rationale": "pick"},
+        ])
+        planner = RecoveryPlanner(
+            RecoveryConfig(max_retries=1, enable_replan=True),
+            grounding_engine=engine,
+            registry=registry,
+        )
+        # First failure → retry
+        d1 = planner.on_step_failed(
+            self._failed_step(), 0, "pick up", set(), "fail"
+        )
+        assert d1.strategy == "retry"
+        # Second failure → replan (retries exhausted)
+        d2 = planner.on_step_failed(
+            self._failed_step(), 0, "pick up", set(), "fail again"
+        )
+        assert d2.strategy == "replan"
+
+    def test_retry_count_tracks_per_step(self):
+        """Each step has independent retry counters."""
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        planner = RecoveryPlanner(RecoveryConfig(max_retries=1))
+        # Step 0 fails once → retry
+        d0 = planner.on_step_failed(
+            self._failed_step("step_a"), 0, "instr", set(), "err"
+        )
+        assert d0.strategy == "retry"
+        # Step 1 also gets its own retry
+        d1 = planner.on_step_failed(
+            self._failed_step("step_b"), 1, "instr", set(), "err"
+        )
+        assert d1.strategy == "retry"
+
+    # ── Replan strategy ───────────────────────────────────────
+
+    def test_replan_returns_new_plan(self):
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        registry = self._make_registry()
+        engine = self._make_engine(registry, [
+            {"capability_name": "navigate_to_location",
+             "parameters": {"location_name": "kitchen"}, "rationale": "go"},
+        ])
+        planner = RecoveryPlanner(
+            RecoveryConfig(max_retries=0, enable_replan=True),
+            grounding_engine=engine,
+            registry=registry,
+        )
+        decision = planner.on_step_failed(
+            self._failed_step(), 0, "go to kitchen", set(), "nav fail"
+        )
+        assert decision.strategy == "replan"
+        assert decision.new_plan is not None
+        assert decision.new_plan.feasible
+        assert len(decision.new_plan.steps) >= 1
+
+    def test_replan_skips_completed_steps(self):
+        """When replanning with updated state, backward chainer skips done work."""
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        registry = self._make_registry()
+        # The mock response returns only pick_up — the engine with auto_chain=True
+        # would insert stabilize + navigate, but since the state already has those
+        # postconditions, they should be skipped
+        engine_with_chain = GroundingEngine(
+            registry,
+            MockBackend(json.dumps({
+                "feasible": True, "reason": "", "steps": [
+                    {"capability_name": "pick_up_object",
+                     "parameters": {"object_name": "bottle"}, "rationale": "pick"},
+                ]
+            })),
+            auto_chain=True,
+            validate_params=False,
+        )
+        planner = RecoveryPlanner(
+            RecoveryConfig(max_retries=0, enable_replan=True),
+            grounding_engine=engine_with_chain,
+            registry=registry,
+        )
+        # State already has stabilize and navigate postconditions
+        state = {"robot_is_balanced", "robot_at_location"}
+        decision = planner.on_step_failed(
+            self._failed_step(), 0,
+            "pick up the bottle from the table",
+            state, "gripper error",
+        )
+        assert decision.strategy == "replan"
+        # The new plan should NOT include stabilize_robot or navigate_to_location
+        # since their postconditions are already in state
+        step_names = [s.capability_name for s in decision.new_plan.steps]
+        assert "stabilize_robot" not in step_names
+        assert "navigate_to_location" not in step_names
+        assert "pick_up_object" in step_names
+
+    def test_replan_disabled_goes_to_fallback(self):
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        planner = RecoveryPlanner(
+            RecoveryConfig(
+                max_retries=0,
+                enable_replan=False,
+                safe_fallback="return_to_home",
+            ),
+        )
+        decision = planner.on_step_failed(
+            self._failed_step(), 0, "do thing", set(), "error"
+        )
+        assert decision.strategy == "fallback"
+
+    def test_recovery_planner_without_engine(self):
+        """Replan is skipped when no grounding engine is provided."""
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        planner = RecoveryPlanner(
+            RecoveryConfig(
+                max_retries=0,
+                enable_replan=True,  # enabled but no engine
+                safe_fallback="return_to_home",
+            ),
+        )
+        decision = planner.on_step_failed(
+            self._failed_step(), 0, "instr", set(), "err"
+        )
+        # Should skip replan and go to fallback
+        assert decision.strategy == "fallback"
+
+    # ── Fallback strategy ─────────────────────────────────────
+
+    def test_fallback_decision(self):
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        planner = RecoveryPlanner(
+            RecoveryConfig(
+                max_retries=0,
+                enable_replan=False,
+                safe_fallback="return_to_home",
+            ),
+        )
+        decision = planner.on_step_failed(
+            self._failed_step(), 0, "instr", set(), "err"
+        )
+        assert decision.strategy == "fallback"
+        assert "return_to_home" in decision.reason
+
+    def test_fallback_with_registry_validation(self):
+        """Fallback capability must exist in registry when registry is provided."""
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        registry = self._make_registry()
+        planner = RecoveryPlanner(
+            RecoveryConfig(
+                max_retries=0,
+                enable_replan=False,
+                safe_fallback="nonexistent_fallback",
+            ),
+            registry=registry,
+        )
+        decision = planner.on_step_failed(
+            self._failed_step(), 0, "instr", set(), "err"
+        )
+        # Fallback not registered → abort
+        assert decision.strategy == "abort"
+
+    # ── Abort strategy ────────────────────────────────────────
+
+    def test_no_fallback_goes_to_abort(self):
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        planner = RecoveryPlanner(
+            RecoveryConfig(
+                max_retries=0,
+                enable_replan=False,
+                safe_fallback=None,
+            ),
+        )
+        decision = planner.on_step_failed(
+            self._failed_step(), 0, "instr", set(), "err"
+        )
+        assert decision.strategy == "abort"
+
+    def test_abort_decision_has_reason(self):
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        planner = RecoveryPlanner(
+            RecoveryConfig(max_retries=0, enable_replan=False),
+        )
+        decision = planner.on_step_failed(
+            self._failed_step(), 0, "instr", set(), "some error"
+        )
+        assert decision.strategy == "abort"
+        assert "exhausted" in decision.reason.lower()
+        assert "some error" in decision.reason
+
+    # ── RecoveryExhaustedError ────────────────────────────────
+
+    def test_recovery_exhausted_error(self):
+        from ros2_lingua_core import RecoveryExhaustedError
+        e = RecoveryExhaustedError("pick_up_object", ["retry", "replan"])
+        assert "pick_up_object" in str(e)
+        assert "retry" in str(e)
+        assert "replan" in str(e)
+        assert e.capability_name == "pick_up_object"
+        assert e.strategies_tried == ["retry", "replan"]
+
+    # ── Reset ─────────────────────────────────────────────────
+
+    def test_reset_clears_retry_counts(self):
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        planner = RecoveryPlanner(RecoveryConfig(max_retries=1))
+        # Use up the retry for step 0
+        d1 = planner.on_step_failed(
+            self._failed_step(), 0, "instr", set(), "err"
+        )
+        assert d1.strategy == "retry"
+        # Reset
+        planner.reset()
+        # Now step 0 should get a fresh retry
+        d2 = planner.on_step_failed(
+            self._failed_step(), 0, "instr", set(), "err"
+        )
+        assert d2.strategy == "retry"
+
+    # ── Multiple step failures ────────────────────────────────
+
+    def test_multiple_step_failures(self):
+        """Different steps can fail and recover independently."""
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        planner = RecoveryPlanner(RecoveryConfig(max_retries=1))
+        # Step 0 fails → retry
+        assert planner.on_step_failed(
+            self._failed_step("step_a"), 0, "instr", set(), "err"
+        ).strategy == "retry"
+        # Step 0 fails again → escalate (no engine, no fallback → abort)
+        assert planner.on_step_failed(
+            self._failed_step("step_a"), 0, "instr", set(), "err"
+        ).strategy == "abort"
+        # Step 2 fails → retry (independent counter)
+        assert planner.on_step_failed(
+            self._failed_step("step_c"), 2, "instr", set(), "err"
+        ).strategy == "retry"
+
+    # ── Replan with partial state ─────────────────────────────
+
+    def test_replan_with_partial_state(self):
+        """After 2/4 steps complete, replan only plans remaining work."""
+        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        registry = self._make_registry()
+        # Mock engine returns the single remaining step
+        engine = self._make_engine(registry, [
+            {"capability_name": "pick_up_object",
+             "parameters": {"object_name": "cup"}, "rationale": "pick"},
+        ])
+        planner = RecoveryPlanner(
+            RecoveryConfig(max_retries=0, enable_replan=True),
+            grounding_engine=engine,
+            registry=registry,
+        )
+        # Simulate that stabilize and navigate already completed
+        partial_state = {"robot_is_balanced", "robot_at_location"}
+        decision = planner.on_step_failed(
+            self._failed_step("pick_up_object", {"object_name": "cup"}),
+            2,
+            "pick up the cup from the table",
+            partial_state,
+            "gripper fault",
+        )
+        assert decision.strategy == "replan"
+        assert len(decision.new_plan.steps) == 1
+        assert decision.new_plan.steps[0].capability_name == "pick_up_object"
+

@@ -144,3 +144,13 @@ class StepFailedError(DispatchError):
         super().__init__(
             f"Step '{capability_name}' failed" + (f": {reason}" if reason else ".")
         )
+
+class RecoveryExhaustedError(DispatchError):
+    """Raised when all recovery strategies have been exhausted for a failed step."""
+    def __init__(self, capability_name: str, strategies_tried: list):
+        self.capability_name = capability_name
+        self.strategies_tried = strategies_tried
+        super().__init__(
+            f"Recovery exhausted for '{capability_name}'. "
+            f"Tried: {', '.join(strategies_tried)}"
+        )

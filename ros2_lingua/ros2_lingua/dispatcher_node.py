@@ -41,14 +41,17 @@ class DispatcherNode(Node):
         step_timeout_sec (float): Max seconds to wait for a single step.
                                   Default: 60.0
         dispatch_config:          Optional DispatchConfig instance (Level 2).
+        recovery_planner:         Optional RecoveryPlanner for step failure handling.
+                                  If not provided, steps that fail abort the plan.
     """
 
-    def __init__(self, dispatch_config=None):
+    def __init__(self, dispatch_config=None, recovery_planner=None):
         super().__init__("lingua_dispatcher_node")
 
         self.declare_parameter("step_timeout_sec", 60.0)
         self._step_timeout = self.get_parameter("step_timeout_sec").value
         self._dispatch_config = dispatch_config
+        self._recovery_planner = recovery_planner
 
         self._callback_group = ReentrantCallbackGroup()
 
@@ -89,7 +92,11 @@ class DispatcherNode(Node):
         # Capability cache from registry broadcast
         self._capability_map = {}
 
-        self.get_logger().info("DispatcherNode ready.")
+        recovery_status = (
+            f"recovery={self._recovery_planner.config.max_retries} retries"
+            if self._recovery_planner else "recovery=off"
+        )
+        self.get_logger().info(f"DispatcherNode ready ({recovery_status}).")
 
     def set_dispatch_config(self, dispatch_config) -> None:
         """Set or replace the DispatchConfig after construction."""
@@ -97,6 +104,15 @@ class DispatcherNode(Node):
         self.get_logger().info(
             f"DispatchConfig registered for: "
             f"{dispatch_config.registered_capabilities()}"
+        )
+
+    def set_recovery_planner(self, recovery_planner) -> None:
+        """Set or replace the RecoveryPlanner after construction."""
+        self._recovery_planner = recovery_planner
+        self.get_logger().info(
+            f"RecoveryPlanner set: max_retries={recovery_planner.config.max_retries}, "
+            f"replan={recovery_planner.config.enable_replan}, "
+            f"fallback={recovery_planner.config.safe_fallback}"
         )
 
     # ------------------------------------------------------------------
@@ -123,6 +139,7 @@ class DispatcherNode(Node):
 
         steps       = plan_data.get("steps", [])
         instruction = plan_data.get("original_instruction", "")
+        tag_filter  = plan_data.get("tag_filter", None)
         total       = len(steps)
 
         self.get_logger().info(
@@ -130,26 +147,97 @@ class DispatcherNode(Node):
         )
         self._publish_status("STARTED", instruction=instruction)
 
-        for i, step in enumerate(steps):
+        # Reset recovery planner state for this new plan
+        if self._recovery_planner:
+            self._recovery_planner.reset()
+
+        # Track current symbolic state for recovery replanning
+        current_state = set()
+
+        i = 0
+        while i < len(steps):
+            step     = steps[i]
             cap_name = step.get("capability_name", "")
             params   = step.get("parameters", {})
 
-            self.get_logger().info(f"Step {i+1}/{total}: {cap_name}")
+            self.get_logger().info(f"Step {i+1}/{len(steps)}: {cap_name}")
             self._publish_status("STEP_STARTED", step=cap_name, instruction=instruction)
 
             success, state_set, state_clear = self._execute_step(cap_name, params)
 
             if state_set or state_clear:
                 self._update_state(state_set, state_clear)
+                current_state.update(state_set)
+                current_state -= set(state_clear)
 
-            if not success:
+            if success:
+                self._publish_status("STEP_COMPLETE", step=cap_name, instruction=instruction)
+                i += 1
+                continue
+
+            # ── Step failed — attempt recovery if planner available ──
+            if self._recovery_planner is None:
                 self.get_logger().error(
-                    f"Step '{cap_name}' failed. Aborting plan."
+                    f"Step '{cap_name}' failed. Aborting plan (no recovery planner)."
                 )
                 self._publish_status("FAILED", step=cap_name, instruction=instruction)
                 return
 
-            self._publish_status("STEP_COMPLETE", step=cap_name, instruction=instruction)
+            decision = self._recovery_planner.on_step_failed(
+                failed_step=step,
+                step_index=i,
+                original_instruction=instruction,
+                current_state=current_state,
+                error=f"Step '{cap_name}' returned failure",
+                tag_filter=tag_filter,
+            )
+
+            if decision.strategy == "retry":
+                self.get_logger().info(f"Recovery: retrying '{cap_name}'")
+                self._publish_status("STEP_RETRY", step=cap_name, instruction=instruction)
+                # Loop will re-execute the same step (i not incremented)
+                continue
+
+            elif decision.strategy == "replan":
+                self.get_logger().info(
+                    f"Recovery: replanned — {len(decision.new_plan.steps)} new step(s)"
+                )
+                self._publish_status("REPLANNING", step=cap_name, instruction=instruction)
+                # Replace remaining steps with the new plan
+                steps = [s.to_dict() if hasattr(s, 'to_dict') else s
+                         for s in decision.new_plan.steps]
+                i = 0  # restart from the beginning of the new plan
+                continue
+
+            elif decision.strategy == "fallback":
+                fallback_name = self._recovery_planner.config.safe_fallback
+                fallback_params = self._recovery_planner.config.safe_fallback_params
+                self.get_logger().warn(
+                    f"Recovery: executing fallback '{fallback_name}'"
+                )
+                self._publish_status("FALLBACK", step=fallback_name, instruction=instruction)
+                fb_success, fb_set, fb_clear = self._execute_step(
+                    fallback_name, fallback_params
+                )
+                if fb_set or fb_clear:
+                    self._update_state(fb_set, fb_clear)
+                if not fb_success:
+                    self.get_logger().error(
+                        f"Fallback '{fallback_name}' also failed."
+                    )
+                self._publish_status(
+                    "RECOVERY_FAILED", step=cap_name, instruction=instruction
+                )
+                return
+
+            else:  # abort
+                self.get_logger().error(
+                    f"Recovery: aborting. Reason: {decision.reason}"
+                )
+                self._publish_status(
+                    "RECOVERY_FAILED", step=cap_name, instruction=instruction
+                )
+                return
 
         self._publish_status("COMPLETED", instruction=instruction)
         self.get_logger().info("Plan executed successfully.")

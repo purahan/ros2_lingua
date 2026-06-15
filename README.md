@@ -110,8 +110,8 @@ Most LLM-to-robot integrations today are one-off scripts — they hardcode topic
 - Python 3.10+
 - At least one LLM backend:
   - [Ollama](https://ollama.com/) (recommended for local use, no API key needed)
-  - OpenAI API key
-  - Anthropic API key
+  - [OpenAI](https://openai.com/) API key
+  - [Anthropic](https://www.anthropic.com/) API key
 
 ---
 

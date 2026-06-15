@@ -1,0 +1,57 @@
+name: Lint & style
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: ruff + mypy
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install linting tools
+        run: |
+          pip install --upgrade pip
+          pip install ruff mypy
+          pip install -e "ros2_lingua_core[dev]"
+
+      # ruff replaces flake8 + isort + pyupgrade — much faster.
+      - name: ruff (lint + format check)
+        run: |
+          ruff check ros2_lingua_core/
+          ruff format --check ros2_lingua_core/
+
+      # Type checking — starts permissive, tighten over time in mypy.ini.
+      - name: mypy (type check)
+        run: |
+          mypy ros2_lingua_core/ros2_lingua_core/ \
+            --ignore-missing-imports \
+            --no-strict-optional
+
+      # Hard rule from CONTRIBUTING.md: ros2_lingua_core must have zero ROS 2 imports.
+      - name: Verify ros2_lingua_core has no ROS 2 imports
+        run: |
+          echo "Scanning for forbidden ROS 2 imports in ros2_lingua_core..."
+          if grep -rn --include="*.py" \
+               -e "^import rclpy" \
+               -e "^from rclpy" \
+               -e "^import rclcpp" \
+               ros2_lingua_core/ros2_lingua_core/; then
+            echo "ERROR: ros2_lingua_core must not import ROS 2 packages."
+            exit 1
+          fi
+          echo "Clean — no ROS 2 imports found."

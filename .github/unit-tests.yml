@@ -1,0 +1,56 @@
+name: Unit tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+# Cancel any in-progress run for the same PR/branch so pushes don't stack up.
+concurrency:
+  group: unit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-22.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # ros2_lingua_core has no ROS 2 deps — install it in pure-Python mode.
+      - name: Install core package and test dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e "ros2_lingua_core[dev]"
+
+      - name: Run unit tests with coverage
+        run: |
+          cd ros2_lingua_core
+          python -m pytest tests/test_core.py -v \
+            --tb=short \
+            --strict-markers \
+            --cov=ros2_lingua_core \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=80
+
+      - name: Upload coverage report
+        if: matrix.python-version == '3.11'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ros2_lingua_core/coverage.xml
+          retention-days: 7

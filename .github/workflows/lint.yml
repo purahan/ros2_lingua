@@ -22,6 +22,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: "ros2_lingua_core/setup.py"
 
       - name: Install linting tools
         run: |

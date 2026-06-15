@@ -4,11 +4,13 @@ setup(
     name="ros2_lingua_core",
     version="0.1.0",
     packages=find_packages(),
-    data_files=[
-        ("share/ament_index/resource_index/packages",
-            ["resource/ros2_lingua_core"]),
-        ("share/ros2_lingua_core", ["package.xml"]),
-    ],
     install_requires=["setuptools"],
+    extras_require={
+        "dev": [
+            "pytest>=7.0",
+            "pytest-cov>=4.0",
+            "pytest-timeout>=2.0",
+        ]
+    },
     zip_safe=True,
 )

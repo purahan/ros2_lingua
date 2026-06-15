@@ -10,8 +10,8 @@ It also handles:
 - Dependency resolution (chaining capabilities via pre/postconditions)
 """
 
-from typing import Dict, List, Optional, Set
-from .schema import Capability, Tags
+
+from .schema import Capability
 
 
 class CapabilityRegistry:
@@ -30,11 +30,11 @@ class CapabilityRegistry:
 
     def __init__(self):
         # name -> Capability
-        self._capabilities: Dict[str, Capability] = {}
+        self._capabilities: dict[str, Capability] = {}
 
         # Current symbolic state of the robot
         # e.g. {"robot_is_balanced", "arm_is_free"}
-        self._state: Set[str] = set()
+        self._state: set[str] = set()
 
     # ------------------------------------------------------------------
     # Registration
@@ -65,16 +65,16 @@ class CapabilityRegistry:
     # Lookup
     # ------------------------------------------------------------------
 
-    def get(self, name: str) -> Optional[Capability]:
+    def get(self, name: str) -> Capability | None:
         return self._capabilities.get(name)
 
-    def get_all(self) -> List[Capability]:
+    def get_all(self) -> list[Capability]:
         return list(self._capabilities.values())
 
-    def names(self) -> List[str]:
+    def names(self) -> list[str]:
         return list(self._capabilities.keys())
 
-    def get_by_tag(self, tag: str) -> List[Capability]:
+    def get_by_tag(self, tag: str) -> list[Capability]:
         """
         Return all capabilities that include the given tag.
 
@@ -84,7 +84,7 @@ class CapabilityRegistry:
         """
         return [c for c in self._capabilities.values() if tag in c.tags]
 
-    def get_by_tags(self, tags: List[str], match: str = "any") -> List[Capability]:
+    def get_by_tags(self, tags: list[str], match: str = "any") -> list[Capability]:
         """
         Return capabilities matching the given tags.
 
@@ -111,14 +111,14 @@ class CapabilityRegistry:
                 if any(t in c.tags for t in tags)
             ]
 
-    def get_all_tags(self) -> List[str]:
+    def get_all_tags(self) -> list[str]:
         """Return a sorted list of all unique tags currently in the registry."""
         all_tags: set = set()
         for cap in self._capabilities.values():
             all_tags.update(cap.tags)
         return sorted(all_tags)
 
-    def get_untagged(self) -> List[Capability]:
+    def get_untagged(self) -> list[Capability]:
         """Return all capabilities that have no tags assigned."""
         return [c for c in self._capabilities.values() if not c.tags]
 
@@ -134,14 +134,14 @@ class CapabilityRegistry:
         """Mark a symbolic state token as false."""
         self._state.discard(token)
 
-    def update_state(self, tokens: Set[str]) -> None:
+    def update_state(self, tokens: set[str]) -> None:
         """Replace the entire state set."""
         self._state = set(tokens)
 
-    def get_state(self) -> Set[str]:
+    def get_state(self) -> set[str]:
         return set(self._state)
 
-    def is_satisfied(self, preconditions: List[str]) -> bool:
+    def is_satisfied(self, preconditions: list[str]) -> bool:
         """Returns True if all preconditions are in the current state."""
         return all(p in self._state for p in preconditions)
 
@@ -152,9 +152,9 @@ class CapabilityRegistry:
     def resolve_chain(
         self,
         goal_capability_name: str,
-        current_state: Optional[Set[str]] = None,
+        current_state: set[str] | None = None,
         max_depth: int = 10,
-    ) -> List[Capability]:
+    ) -> list[Capability]:
         """
         Given a goal capability, return the ordered sequence of capabilities
         that need to execute to satisfy all preconditions, starting from
@@ -186,18 +186,18 @@ class CapabilityRegistry:
         if goal is None:
             raise ValueError(f"Capability '{goal_capability_name}' is not registered.")
 
-        plan: List[Capability] = []
+        plan: list[Capability] = []
         self._backward_chain(goal, current_state, plan, depth=0, max_depth=max_depth)
         return plan
 
     def _backward_chain(
         self,
         capability: Capability,
-        current_state: Set[str],
-        plan: List[Capability],
+        current_state: set[str],
+        plan: list[Capability],
         depth: int,
         max_depth: int,
-    ) -> Set[str]:
+    ) -> set[str]:
         """
         Recursive backward chaining. Returns the state after this
         capability and all its prerequisites have been resolved.
@@ -234,7 +234,7 @@ class CapabilityRegistry:
 
         return current_state
 
-    def _find_producer(self, token: str) -> Optional[Capability]:
+    def _find_producer(self, token: str) -> Capability | None:
         """Find the first registered capability whose postconditions include token."""
         for cap in self._capabilities.values():
             if token in cap.postconditions:
@@ -245,7 +245,7 @@ class CapabilityRegistry:
     # LLM context generation
     # ------------------------------------------------------------------
 
-    def to_llm_context(self, tags: Optional[List[str]] = None) -> str:
+    def to_llm_context(self, tags: list[str] | None = None) -> str:
         """
         Returns a formatted string describing registered capabilities,
         suitable for injection into an LLM system prompt.

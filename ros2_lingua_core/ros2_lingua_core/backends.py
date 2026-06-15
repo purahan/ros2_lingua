@@ -15,16 +15,15 @@ Available backends:
 - MockBackend       : Deterministic mock for testing
 """
 
-import time
 import logging
+import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 from .errors import (
     LLMBackendError,
-    LLMTimeoutError,
-    LLMRateLimitError,
     LLMModelNotFoundError,
+    LLMRateLimitError,
+    LLMTimeoutError,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,7 +68,7 @@ def _with_retry(fn, retry_config: RetryConfig, backend_name: str):
     Execute fn() with retry logic based on retry_config.
     Raises the last exception if all retries are exhausted.
     """
-    last_error = None
+    last_error: Exception | None = None
     delay = retry_config.base_delay_sec
 
     for attempt in range(retry_config.max_retries + 1):
@@ -137,12 +136,12 @@ class OpenAIBackend:
             raise ImportError(
                 "openai package is required for OpenAIBackend. "
                 "Install with: pip install openai"
-            )
+            ) from None
         self._client = OpenAI(api_key=api_key, timeout=timeout_sec)  # type: ignore
         self._model = model
         self._retry = retry or RetryConfig()
 
-    def complete(self, messages: List[Dict[str, str]]) -> str:
+    def complete(self, messages: list[dict[str, str]]) -> str:
         def _call():
             try:
                 response = self._client.chat.completions.create(
@@ -154,15 +153,15 @@ class OpenAIBackend:
             except Exception as e:
                 err_str = str(e).lower()
                 if "rate limit" in err_str or "429" in err_str:
-                    raise LLMRateLimitError(f"OpenAI rate limit: {e}", original=e)
+                    raise LLMRateLimitError(f"OpenAI rate limit: {e}", original=e) from e
                 elif "timeout" in err_str or "timed out" in err_str:
-                    raise LLMTimeoutError(f"OpenAI timeout: {e}", original=e)
+                    raise LLMTimeoutError(f"OpenAI timeout: {e}", original=e) from e
                 elif "model" in err_str and "not found" in err_str:
                     raise LLMModelNotFoundError(
                         f"OpenAI model '{self._model}' not found.", original=e
-                    )
+                    ) from e
                 else:
-                    raise LLMBackendError(f"OpenAI error: {e}", original=e)
+                    raise LLMBackendError(f"OpenAI error: {e}", original=e) from e
 
         return _with_retry(_call, self._retry, "OpenAI")
 
@@ -195,14 +194,14 @@ class AnthropicBackend:
             raise ImportError(
                 "anthropic package is required for AnthropicBackend. "
                 "Install with: pip install anthropic"
-            )
+            ) from None
         self._client = anthropic.Anthropic(api_key=api_key)  # type: ignore
         self._model = model
         self._max_tokens = max_tokens
         self._timeout_sec = timeout_sec
         self._retry = retry or RetryConfig()
 
-    def complete(self, messages: List[Dict[str, str]]) -> str:
+    def complete(self, messages: list[dict[str, str]]) -> str:
         def _call():
             try:
                 system_content = ""
@@ -223,15 +222,15 @@ class AnthropicBackend:
             except Exception as e:
                 err_str = str(e).lower()
                 if "rate limit" in err_str or "529" in err_str or "overloaded" in err_str:
-                    raise LLMRateLimitError(f"Anthropic rate limit: {e}", original=e)
+                    raise LLMRateLimitError(f"Anthropic rate limit: {e}", original=e) from e
                 elif "timeout" in err_str:
-                    raise LLMTimeoutError(f"Anthropic timeout: {e}", original=e)
+                    raise LLMTimeoutError(f"Anthropic timeout: {e}", original=e) from e
                 elif "model" in err_str and ("not found" in err_str or "invalid" in err_str):
                     raise LLMModelNotFoundError(
                         f"Anthropic model '{self._model}' not found.", original=e
-                    )
+                    ) from e
                 else:
-                    raise LLMBackendError(f"Anthropic error: {e}", original=e)
+                    raise LLMBackendError(f"Anthropic error: {e}", original=e) from e
 
         return _with_retry(_call, self._retry, "Anthropic")
 
@@ -265,13 +264,13 @@ class OllamaBackend:
             raise ImportError(
                 "ollama package is required for OllamaBackend. "
                 "Install with: pip install ollama"
-            )
+            ) from None
         self._model = model
         self._host = host
         self._timeout_sec = timeout_sec
         self._retry = retry or RetryConfig()
 
-    def complete(self, messages: List[Dict[str, str]]) -> str:
+    def complete(self, messages: list[dict[str, str]]) -> str:
         def _call():
             try:
                 response = self._ollama.chat(
@@ -287,17 +286,17 @@ class OllamaBackend:
                         f"Ollama model '{self._model}' not found. "
                         f"Pull it with: ollama pull {self._model}",
                         original=e,
-                    )
+                    ) from e
                 elif "timeout" in err_str or "timed out" in err_str:
-                    raise LLMTimeoutError(f"Ollama timeout: {e}", original=e)
+                    raise LLMTimeoutError(f"Ollama timeout: {e}", original=e) from e
                 elif "connection" in err_str or "refused" in err_str:
                     raise LLMBackendError(
                         f"Cannot connect to Ollama at {self._host}. "
                         "Is Ollama running? Try: ollama serve",
                         original=e,
-                    )
+                    ) from e
                 else:
-                    raise LLMBackendError(f"Ollama error: {e}", original=e)
+                    raise LLMBackendError(f"Ollama error: {e}", original=e) from e
 
         return _with_retry(_call, self._retry, "Ollama")
 
@@ -322,7 +321,7 @@ class MockBackend:
 
     def __init__(self, fixed_response: str):
         self._response = fixed_response
-        self._fail_with = None
+        self._fail_with: Exception | None = None
         self._retries_before_success = 0
         self._call_count = 0
 
@@ -344,7 +343,7 @@ class MockBackend:
         instance._retries_before_success = retries_before_success
         return instance
 
-    def complete(self, messages: List[Dict[str, str]]) -> str:
+    def complete(self, messages: list[dict[str, str]]) -> str:
         self._call_count += 1
         if self._fail_with and self._call_count <= self._retries_before_success:
             raise self._fail_with

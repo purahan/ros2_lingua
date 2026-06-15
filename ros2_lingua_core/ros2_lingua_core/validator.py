@@ -21,11 +21,10 @@ Type coercion rules:
   anything else     → pass through unchanged (ROS message types etc.)
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-from .schema import Capability, CapabilityParameter
 from .errors import ParameterValidationError
-
+from .schema import Capability, CapabilityParameter
 
 # Types that ros2_lingua validates natively.
 # Anything not in this set is treated as a ROS message type and passed through.
@@ -48,9 +47,9 @@ class ParameterValidator:
     def validate(
         self,
         capability: Capability,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
         strict: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Validate and coerce parameters against the capability schema.
 
@@ -115,7 +114,7 @@ class ParameterValidator:
         steps: list,
         capability_lookup: dict,
         strict: bool = False,
-    ) -> Tuple[list, list]:
+    ) -> tuple[list, list]:
         """
         Validate parameters for all steps in a plan.
 
@@ -167,7 +166,7 @@ class ParameterValidator:
 
     def _coerce(
         self, value: Any, param_def: CapabilityParameter
-    ) -> Tuple[Any, Optional[str]]:
+    ) -> tuple[Any, str | None]:
         """
         Attempt to coerce value to the expected type.
 
@@ -295,9 +294,9 @@ _default_validator = ParameterValidator()
 
 def validate_parameters(
     capability: Capability,
-    parameters: Dict[str, Any],
+    parameters: dict[str, Any],
     strict: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Module-level convenience function. Equivalent to:
         ParameterValidator().validate(capability, parameters)

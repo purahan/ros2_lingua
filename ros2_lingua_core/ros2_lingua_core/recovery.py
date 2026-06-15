@@ -21,7 +21,7 @@ Design:
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +52,8 @@ class RecoveryConfig:
     """
     max_retries: int = 2
     enable_replan: bool = True
-    safe_fallback: Optional[str] = None
-    safe_fallback_params: Dict[str, Any] = field(default_factory=dict)
+    safe_fallback: str | None = None
+    safe_fallback_params: dict[str, Any] = field(default_factory=dict)
     abort_on_fallback_failure: bool = True
 
 
@@ -130,7 +130,7 @@ class RecoveryPlanner:
 
         # Track retry counts per step index
         # Key: step_index, Value: number of retries attempted
-        self._retry_counts: Dict[int, int] = {}
+        self._retry_counts: dict[int, int] = {}
 
     @property
     def config(self) -> RecoveryConfig:
@@ -143,12 +143,12 @@ class RecoveryPlanner:
 
     def on_step_failed(
         self,
-        failed_step: Dict[str, Any],
+        failed_step: dict[str, Any],
         step_index: int,
         original_instruction: str,
-        current_state: Set[str],
+        current_state: set[str],
         error: str = "",
-        tag_filter: Optional[List[str]] = None,
+        tag_filter: list[str] | None = None,
     ) -> RecoveryDecision:
         """
         Decide what to do after a step failure.

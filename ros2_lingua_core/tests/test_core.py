@@ -10,6 +10,7 @@ Run with:
 """
 
 import json
+
 import pytest
 
 from ros2_lingua_core import (
@@ -19,7 +20,6 @@ from ros2_lingua_core import (
     GroundingEngine,
     MockBackend,
 )
-
 
 # ------------------------------------------------------------------
 # Fixtures
@@ -398,7 +398,8 @@ class TestRobustness:
 
     def test_mock_backend_failing_then_succeeds(self):
         import json
-        from ros2_lingua_core import MockBackend, LLMTimeoutError
+
+        from ros2_lingua_core import LLMTimeoutError, MockBackend
         success_response = json.dumps({
             "feasible": True, "reason": "", "steps": []
         })
@@ -407,18 +408,17 @@ class TestRobustness:
             retries_before_success=2,
             success_response=success_response,
         )
+        import contextlib
         # First 2 calls raise, 3rd succeeds
         for _ in range(2):
-            try:
+            with contextlib.suppress(LLMTimeoutError):
                 backend.complete([])
-            except LLMTimeoutError:
-                pass
         result = backend.complete([])
         assert "feasible" in result
 
     def test_empty_registry_returns_infeasible(self):
+
         from ros2_lingua_core import CapabilityRegistry, GroundingEngine, MockBackend
-        import json
         r = CapabilityRegistry()
         engine = GroundingEngine(r, MockBackend("{}"), auto_chain=False)
         plan = engine.ground("do something")
@@ -427,9 +427,14 @@ class TestRobustness:
 
     def test_error_hierarchy(self):
         from ros2_lingua_core import (
-            LinguaError, LLMBackendError, LLMTimeoutError,
-            LLMRateLimitError, GroundingError, HallucinationError,
-            PlanningError, UnsatisfiablePreconditionError,
+            GroundingError,
+            HallucinationError,
+            LinguaError,
+            LLMBackendError,
+            LLMRateLimitError,
+            LLMTimeoutError,
+            PlanningError,
+            UnsatisfiablePreconditionError,
         )
         assert issubclass(LLMBackendError, LinguaError)
         assert issubclass(LLMTimeoutError, LLMBackendError)
@@ -458,8 +463,9 @@ class TestRobustness:
         assert "navigate_to_location" in str(e)
 
     def test_grounding_engine_retry_params(self):
-        from ros2_lingua_core import CapabilityRegistry, GroundingEngine, MockBackend, Capability
         import json
+
+        from ros2_lingua_core import Capability, CapabilityRegistry, GroundingEngine, MockBackend
         r = CapabilityRegistry()
         r.register(Capability(name="nav", description="d", ros_action="a/b"))
         mock = MockBackend(json.dumps({"feasible": True, "reason": "", "steps": [
@@ -507,7 +513,7 @@ class TestParameterValidation:
         assert result["speed"] == 0.5
 
     def test_float_invalid_string_fails(self):
-        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        from ros2_lingua_core import ParameterValidationError, ParameterValidator
         cap = self._make_cap([CapabilityParameter("speed", "float", "speed")])
         with pytest.raises(ParameterValidationError) as exc_info:
             ParameterValidator().validate(cap, {"speed": "fast"})
@@ -522,7 +528,7 @@ class TestParameterValidation:
         assert isinstance(result["count"], int)
 
     def test_int_from_fractional_float_fails(self):
-        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        from ros2_lingua_core import ParameterValidationError, ParameterValidator
         cap = self._make_cap([CapabilityParameter("count", "int", "count")])
         with pytest.raises(ParameterValidationError):
             ParameterValidator().validate(cap, {"count": 3.5})
@@ -548,7 +554,7 @@ class TestParameterValidation:
             assert result["enabled"] is False, f"Failed for: {val}"
 
     def test_bool_invalid_string_fails(self):
-        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        from ros2_lingua_core import ParameterValidationError, ParameterValidator
         cap = self._make_cap([CapabilityParameter("enabled", "boolean", "flag")])
         with pytest.raises(ParameterValidationError):
             ParameterValidator().validate(cap, {"enabled": "maybe"})
@@ -560,7 +566,7 @@ class TestParameterValidation:
         assert result["items"] == ["a", "b", "c"]
 
     def test_list_invalid_json_fails(self):
-        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        from ros2_lingua_core import ParameterValidationError, ParameterValidator
         cap = self._make_cap([CapabilityParameter("items", "list", "items")])
         with pytest.raises(ParameterValidationError):
             ParameterValidator().validate(cap, {"items": "not json"})
@@ -568,7 +574,7 @@ class TestParameterValidation:
     # ── Required / optional parameters ────────────────────────
 
     def test_missing_required_fails(self):
-        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        from ros2_lingua_core import ParameterValidationError, ParameterValidator
         cap = self._make_cap([CapabilityParameter("loc", "string", "location", required=True)])
         with pytest.raises(ParameterValidationError) as exc_info:
             ParameterValidator().validate(cap, {})
@@ -583,7 +589,7 @@ class TestParameterValidation:
         assert result["speed"] == 0.5
 
     def test_all_failures_reported_at_once(self):
-        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        from ros2_lingua_core import ParameterValidationError, ParameterValidator
         cap = self._make_cap([
             CapabilityParameter("speed",  "float",  "speed",  required=True),
             CapabilityParameter("name",   "string", "name",   required=True),
@@ -611,7 +617,7 @@ class TestParameterValidation:
     # ── Strict mode ────────────────────────────────────────────
 
     def test_strict_mode_rejects_unknown_params(self):
-        from ros2_lingua_core import ParameterValidator, ParameterValidationError
+        from ros2_lingua_core import ParameterValidationError, ParameterValidator
         cap = self._make_cap([CapabilityParameter("name", "string", "name")])
         with pytest.raises(ParameterValidationError):
             ParameterValidator().validate(
@@ -780,7 +786,7 @@ class TestRecoveryPlanner:
     # ── Retry strategy ────────────────────────────────────────
 
     def test_retry_decision_on_first_failure(self):
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         planner = RecoveryPlanner(RecoveryConfig(max_retries=2))
         decision = planner.on_step_failed(
             failed_step=self._failed_step(),
@@ -794,7 +800,7 @@ class TestRecoveryPlanner:
 
     def test_retry_exhaustion_leads_to_replan(self):
         """After max retries, should escalate to replan."""
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         registry = self._make_registry()
         engine = self._make_engine(registry, [
             {"capability_name": "pick_up_object",
@@ -818,7 +824,7 @@ class TestRecoveryPlanner:
 
     def test_retry_count_tracks_per_step(self):
         """Each step has independent retry counters."""
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         planner = RecoveryPlanner(RecoveryConfig(max_retries=1))
         # Step 0 fails once → retry
         d0 = planner.on_step_failed(
@@ -834,7 +840,7 @@ class TestRecoveryPlanner:
     # ── Replan strategy ───────────────────────────────────────
 
     def test_replan_returns_new_plan(self):
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         registry = self._make_registry()
         engine = self._make_engine(registry, [
             {"capability_name": "navigate_to_location",
@@ -855,7 +861,7 @@ class TestRecoveryPlanner:
 
     def test_replan_skips_completed_steps(self):
         """When replanning with updated state, backward chainer skips done work."""
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         registry = self._make_registry()
         # The mock response returns only pick_up — the engine with auto_chain=True
         # would insert stabilize + navigate, but since the state already has those
@@ -892,7 +898,7 @@ class TestRecoveryPlanner:
         assert "pick_up_object" in step_names
 
     def test_replan_disabled_goes_to_fallback(self):
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         planner = RecoveryPlanner(
             RecoveryConfig(
                 max_retries=0,
@@ -907,7 +913,7 @@ class TestRecoveryPlanner:
 
     def test_recovery_planner_without_engine(self):
         """Replan is skipped when no grounding engine is provided."""
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         planner = RecoveryPlanner(
             RecoveryConfig(
                 max_retries=0,
@@ -924,7 +930,7 @@ class TestRecoveryPlanner:
     # ── Fallback strategy ─────────────────────────────────────
 
     def test_fallback_decision(self):
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         planner = RecoveryPlanner(
             RecoveryConfig(
                 max_retries=0,
@@ -940,7 +946,7 @@ class TestRecoveryPlanner:
 
     def test_fallback_with_registry_validation(self):
         """Fallback capability must exist in registry when registry is provided."""
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         registry = self._make_registry()
         planner = RecoveryPlanner(
             RecoveryConfig(
@@ -959,7 +965,7 @@ class TestRecoveryPlanner:
     # ── Abort strategy ────────────────────────────────────────
 
     def test_no_fallback_goes_to_abort(self):
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         planner = RecoveryPlanner(
             RecoveryConfig(
                 max_retries=0,
@@ -973,7 +979,7 @@ class TestRecoveryPlanner:
         assert decision.strategy == "abort"
 
     def test_abort_decision_has_reason(self):
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         planner = RecoveryPlanner(
             RecoveryConfig(max_retries=0, enable_replan=False),
         )
@@ -998,7 +1004,7 @@ class TestRecoveryPlanner:
     # ── Reset ─────────────────────────────────────────────────
 
     def test_reset_clears_retry_counts(self):
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         planner = RecoveryPlanner(RecoveryConfig(max_retries=1))
         # Use up the retry for step 0
         d1 = planner.on_step_failed(
@@ -1017,7 +1023,7 @@ class TestRecoveryPlanner:
 
     def test_multiple_step_failures(self):
         """Different steps can fail and recover independently."""
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         planner = RecoveryPlanner(RecoveryConfig(max_retries=1))
         # Step 0 fails → retry
         assert planner.on_step_failed(
@@ -1036,7 +1042,7 @@ class TestRecoveryPlanner:
 
     def test_replan_with_partial_state(self):
         """After 2/4 steps complete, replan only plans remaining work."""
-        from ros2_lingua_core import RecoveryPlanner, RecoveryConfig
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
         registry = self._make_registry()
         # Mock engine returns the single remaining step
         engine = self._make_engine(registry, [

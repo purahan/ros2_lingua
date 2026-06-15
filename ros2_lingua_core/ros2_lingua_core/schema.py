@@ -8,10 +8,9 @@ ONE thing a ROS 2 node can do, in a structured way that both the
 grounding engine and the LLM can reason about.
 """
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
 import json
-
+from dataclasses import dataclass, field
+from typing import Any
 
 # ------------------------------------------------------------------
 # Standard capability tags
@@ -62,9 +61,9 @@ class CapabilityParameter:
     type: str           # "string" | "float" | "int" | "bool" | "geometry_msgs/Pose" | etc.
     description: str
     required: bool = True
-    default: Optional[Any] = None
+    default: Any | None = None
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "name": self.name,
             "type": self.type,
@@ -74,7 +73,7 @@ class CapabilityParameter:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> "CapabilityParameter":
+    def from_dict(cls, data: dict) -> "CapabilityParameter":
         return cls(
             name=data["name"],
             type=data["type"],
@@ -113,27 +112,27 @@ class Capability:
 
     # --- ROS 2 Interface ---
     # Exactly one of these should be set (action OR service)
-    ros_action: Optional[str] = None
-    ros_service: Optional[str] = None
+    ros_action: str | None = None
+    ros_service: str | None = None
 
     # --- What it needs ---
-    parameters: List[CapabilityParameter] = field(default_factory=list)
+    parameters: list[CapabilityParameter] = field(default_factory=list)
 
     # --- State conditions (used for chaining) ---
     # These are symbolic state tokens, e.g. "robot_is_balanced"
-    preconditions: List[str] = field(default_factory=list)
-    postconditions: List[str] = field(default_factory=list)
+    preconditions: list[str] = field(default_factory=list)
+    postconditions: list[str] = field(default_factory=list)
 
     # --- Optional metadata ---
     # Arbitrary key-value pairs for domain-specific info
     # e.g. {"body_part": "left_arm", "max_payload_kg": 1.5}
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     # --- Tags ---
     # Free-form labels for filtering and categorization.
     # Use the Tags constants for standard categories, or define your own.
     # e.g. tags=["locomotion", "outdoor"] or tags=[Tags.MANIPULATION]
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
     def validate(self) -> None:
         """Raises ValueError if the capability definition is malformed."""
@@ -150,7 +149,7 @@ class Capability:
                 f"Capability '{self.name}' must define either ros_action or ros_service."
             )
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "name": self.name,
             "description": self.description,
@@ -167,7 +166,7 @@ class Capability:
         return json.dumps(self.to_dict(), indent=2)
 
     @classmethod
-    def from_dict(cls, data: Dict) -> "Capability":
+    def from_dict(cls, data: dict) -> "Capability":
         return cls(
             name=data["name"],
             description=data["description"],

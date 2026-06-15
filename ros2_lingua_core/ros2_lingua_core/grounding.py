@@ -17,18 +17,16 @@ implements the LLMBackend protocol (OpenAI, Anthropic, Ollama, etc.)
 
 import json
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol
+import time
+from dataclasses import dataclass
+from typing import Any, Protocol
 
-from .registry import CapabilityRegistry
-from .schema import Capability
 from .errors import (
     LLMBackendError,
     LLMTimeoutError,
-    HallucinationError,
-    GroundingError,
     ParameterValidationError,
 )
+from .registry import CapabilityRegistry
 from .validator import ParameterValidator
 
 logger = logging.getLogger(__name__)
@@ -47,7 +45,7 @@ class LLMBackend(Protocol):
     messages (OpenAI-style format) and returns the assistant reply string.
     """
 
-    def complete(self, messages: List[Dict[str, str]]) -> str:
+    def complete(self, messages: list[dict[str, str]]) -> str:
         """
         Args:
             messages: List of {"role": "system"|"user"|"assistant", "content": str}
@@ -72,10 +70,10 @@ class ActionStep:
     rationale: Why the LLM chose this step (useful for debugging/demo)
     """
     capability_name: str
-    parameters: Dict[str, Any]
+    parameters: dict[str, Any]
     rationale: str = ""
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "capability_name": self.capability_name,
             "parameters": self.parameters,
@@ -93,12 +91,12 @@ class ActionPlan:
     feasible: False if the engine determined the plan cannot be executed
     reason: If not feasible, explains why
     """
-    steps: List[ActionStep]
+    steps: list[ActionStep]
     original_instruction: str
     feasible: bool = True
     reason: str = ""
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "original_instruction": self.original_instruction,
             "feasible": self.feasible,
@@ -190,7 +188,7 @@ class GroundingEngine:
         self._strict_params   = strict_params
         self._validator       = ParameterValidator() if validate_params else None
 
-    def ground(self, instruction: str, tag_filter: Optional[List[str]] = None) -> ActionPlan:
+    def ground(self, instruction: str, tag_filter: list[str] | None = None) -> ActionPlan:
         """
         Ground a natural language instruction into an ActionPlan.
 
@@ -227,7 +225,7 @@ class GroundingEngine:
             {"role": "user", "content": instruction},
         ]
 
-        last_error = None
+        last_error: Exception | None = None
         delay = self._retry_delay
 
         for attempt in range(1, self._max_retries + 1):
@@ -247,7 +245,7 @@ class GroundingEngine:
                         f"LLM timeout on attempt {attempt}/{self._max_retries}. "
                         f"Retrying in {delay:.1f}s..."
                     )
-                    import time; time.sleep(delay)
+                    time.sleep(delay)
                     delay *= self._retry_backoff
 
             except LLMBackendError as e:
@@ -257,7 +255,7 @@ class GroundingEngine:
                         f"LLM backend error on attempt {attempt}/{self._max_retries}: {e}. "
                         f"Retrying in {delay:.1f}s..."
                     )
-                    import time; time.sleep(delay)
+                    time.sleep(delay)
                     delay *= self._retry_backoff
                 else:
                     logger.error(f"LLM backend failed after {self._max_retries} attempts: {e}")
@@ -373,7 +371,7 @@ class GroundingEngine:
         necessary prerequisite steps.
         """
         current_state = self._registry.get_state()
-        final_steps: List[ActionStep] = []
+        final_steps: list[ActionStep] = []
 
         for step in plan.steps:
             cap = self._registry.get(step.capability_name)

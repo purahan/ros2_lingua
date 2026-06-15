@@ -8,7 +8,7 @@ setup(
     tests_require=['pytest'],
     extras_require={
         "dev": [
-            "pytest>=7.0",
+            "pytest>=7.0,<8.1.0",
             "pytest-cov>=4.0",
             "pytest-timeout>=2.0",
         ]

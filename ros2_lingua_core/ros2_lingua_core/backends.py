@@ -357,21 +357,15 @@ class MockBackend:
             return self._response
 
         import json
+
         last_msg = messages[-1]["content"].lower() if messages else ""
         if "impossible" in last_msg or "cannot do this" in last_msg or "infeasible" in last_msg:
-            return json.dumps({
-                "feasible": False,
-                "steps": [],
-                "reason": "I cannot do this."
-            })
+            return json.dumps({"feasible": False, "steps": [], "reason": "I cannot do this."})
 
-        return json.dumps({
-            "feasible": True,
-            "steps": [
-                {
-                    "capability_name": "say",
-                    "parameters": {}
-                }
-            ],
-            "reason": "OK"
-        })
+        return json.dumps(
+            {
+                "feasible": True,
+                "steps": [{"capability_name": "say", "parameters": {}}],
+                "reason": "OK",
+            }
+        )

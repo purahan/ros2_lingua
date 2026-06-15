@@ -5,7 +5,7 @@ setup(
     version="0.1.0",
     packages=find_packages(),
     install_requires=["setuptools"],
-    tests_require=['pytest'],
+    tests_require=["pytest"],
     extras_require={
         "dev": [
             "pytest>=7.0,<8.1.0",

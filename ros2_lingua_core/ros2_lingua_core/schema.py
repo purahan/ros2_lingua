@@ -19,29 +19,30 @@ from typing import Any
 # Using these ensures consistent filtering across different robots.
 # You can also define your own tags freely — these are just conventions.
 
+
 class Tags:
     """Standard tag constants for capability categories."""
 
     # Motion / locomotion
-    LOCOMOTION   = "locomotion"   # moving the robot base (navigate, drive, walk)
-    MANIPULATION = "manipulation" # arm, gripper, pick/place
-    BALANCE      = "balance"      # stabilization, posture control
+    LOCOMOTION = "locomotion"  # moving the robot base (navigate, drive, walk)
+    MANIPULATION = "manipulation"  # arm, gripper, pick/place
+    BALANCE = "balance"  # stabilization, posture control
 
     # Perception
-    PERCEPTION   = "perception"   # cameras, lidar, object detection
-    MAPPING      = "mapping"      # SLAM, map building, localization
+    PERCEPTION = "perception"  # cameras, lidar, object detection
+    MAPPING = "mapping"  # SLAM, map building, localization
 
     # Interaction
-    SPEECH       = "speech"       # TTS, STT, voice I/O
-    SOCIAL       = "social"       # gestures, expressions, HRI
+    SPEECH = "speech"  # TTS, STT, voice I/O
+    SOCIAL = "social"  # gestures, expressions, HRI
 
     # System
-    SYSTEM       = "system"       # power, mode switching, diagnostics
-    SAFETY       = "safety"       # e-stop, collision avoidance
+    SYSTEM = "system"  # power, mode switching, diagnostics
+    SAFETY = "safety"  # e-stop, collision avoidance
 
     # Domain-specific (add your own as needed)
-    NAVIGATION   = "navigation"   # alias for locomotion in mobile robot contexts
-    INSPECTION   = "inspection"   # for ROVs, drones, industrial robots
+    NAVIGATION = "navigation"  # alias for locomotion in mobile robot contexts
+    INSPECTION = "inspection"  # for ROVs, drones, industrial robots
 
 
 @dataclass
@@ -57,8 +58,9 @@ class CapabilityParameter:
             required=True
         )
     """
+
     name: str
-    type: str           # "string" | "float" | "int" | "bool" | "geometry_msgs/Pose" | etc.
+    type: str  # "string" | "float" | "int" | "bool" | "geometry_msgs/Pose" | etc.
     description: str
     required: bool = True
     default: Any | None = None

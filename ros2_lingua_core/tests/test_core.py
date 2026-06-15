@@ -25,15 +25,14 @@ from ros2_lingua_core import (
 # Fixtures
 # ------------------------------------------------------------------
 
+
 @pytest.fixture
 def basic_capability():
     return Capability(
         name="navigate_to_location",
         description="Walks the robot to a named location",
         ros_action="humanoid/navigate",
-        parameters=[
-            CapabilityParameter("location_name", "string", "Where to go")
-        ],
+        parameters=[CapabilityParameter("location_name", "string", "Where to go")],
         preconditions=["robot_is_balanced"],
         postconditions=["robot_at_location"],
         tags=["locomotion", "navigation"],
@@ -65,14 +64,13 @@ def registry(basic_capability, stabilize_capability):
 # Schema tests
 # ------------------------------------------------------------------
 
+
 class TestCapability:
     def test_valid_capability(self, basic_capability):
         basic_capability.validate()  # should not raise
 
     def test_missing_name_raises(self):
-        cap = Capability(
-            name="", description="desc", ros_action="test/action"
-        )
+        cap = Capability(name="", description="desc", ros_action="test/action")
         with pytest.raises(ValueError, match="must have a name"):
             cap.validate()
 
@@ -110,6 +108,7 @@ class TestCapability:
 # ------------------------------------------------------------------
 # Registry tests
 # ------------------------------------------------------------------
+
 
 class TestCapabilityRegistry:
     def test_register_and_retrieve(self, basic_capability):
@@ -155,6 +154,7 @@ class TestCapabilityRegistry:
 # Tagging tests
 # ------------------------------------------------------------------
 
+
 class TestCapabilityTagging:
     def test_tags_in_schema(self):
         cap = Capability(
@@ -183,7 +183,9 @@ class TestCapabilityTagging:
     def test_get_by_tag(self):
         r = CapabilityRegistry()
         r.register(Capability(name="nav", description="d", ros_action="a/b", tags=["locomotion"]))
-        r.register(Capability(name="pick", description="d", ros_action="a/c", tags=["manipulation"]))
+        r.register(
+            Capability(name="pick", description="d", ros_action="a/c", tags=["manipulation"])
+        )
         r.register(Capability(name="say", description="d", ros_service="a/d", tags=["speech"]))
         loco = r.get_by_tag("locomotion")
         assert len(loco) == 1
@@ -192,7 +194,9 @@ class TestCapabilityTagging:
     def test_get_by_tags_any(self):
         r = CapabilityRegistry()
         r.register(Capability(name="nav", description="d", ros_action="a/b", tags=["locomotion"]))
-        r.register(Capability(name="pick", description="d", ros_action="a/c", tags=["manipulation"]))
+        r.register(
+            Capability(name="pick", description="d", ros_action="a/c", tags=["manipulation"])
+        )
         r.register(Capability(name="say", description="d", ros_service="a/d", tags=["speech"]))
         result = r.get_by_tags(["locomotion", "manipulation"], match="any")
         names = {c.name for c in result}
@@ -200,27 +204,34 @@ class TestCapabilityTagging:
 
     def test_get_by_tags_all(self):
         r = CapabilityRegistry()
-        r.register(Capability(name="wave", description="d", ros_action="a/b",
-                               tags=["manipulation", "social"]))
-        r.register(Capability(name="pick", description="d", ros_action="a/c",
-                               tags=["manipulation"]))
+        r.register(
+            Capability(
+                name="wave", description="d", ros_action="a/b", tags=["manipulation", "social"]
+            )
+        )
+        r.register(
+            Capability(name="pick", description="d", ros_action="a/c", tags=["manipulation"])
+        )
         result = r.get_by_tags(["manipulation", "social"], match="all")
         assert len(result) == 1
         assert result[0].name == "wave"
 
     def test_get_all_tags(self):
         r = CapabilityRegistry()
-        r.register(Capability(name="nav", description="d", ros_action="a/b",
-                               tags=["locomotion"]))
-        r.register(Capability(name="pick", description="d", ros_action="a/c",
-                               tags=["manipulation", "social"]))
+        r.register(Capability(name="nav", description="d", ros_action="a/b", tags=["locomotion"]))
+        r.register(
+            Capability(
+                name="pick", description="d", ros_action="a/c", tags=["manipulation", "social"]
+            )
+        )
         all_tags = r.get_all_tags()
         assert all_tags == sorted(["locomotion", "manipulation", "social"])
 
     def test_get_untagged(self):
         r = CapabilityRegistry()
-        r.register(Capability(name="tagged", description="d", ros_action="a/b",
-                               tags=["locomotion"]))
+        r.register(
+            Capability(name="tagged", description="d", ros_action="a/b", tags=["locomotion"])
+        )
         r.register(Capability(name="untagged", description="d", ros_action="a/c"))
         untagged = r.get_untagged()
         assert len(untagged) == 1
@@ -228,28 +239,29 @@ class TestCapabilityTagging:
 
     def test_llm_context_tag_filter(self):
         r = CapabilityRegistry()
-        r.register(Capability(name="nav", description="navigates", ros_action="a/b",
-                               tags=["locomotion"]))
-        r.register(Capability(name="pick", description="picks", ros_action="a/c",
-                               tags=["manipulation"]))
+        r.register(
+            Capability(name="nav", description="navigates", ros_action="a/b", tags=["locomotion"])
+        )
+        r.register(
+            Capability(name="pick", description="picks", ros_action="a/c", tags=["manipulation"])
+        )
         context = r.to_llm_context(tags=["locomotion"])
         assert "nav" in context
         assert "pick" not in context
 
     def test_llm_context_no_filter_shows_all(self):
         r = CapabilityRegistry()
-        r.register(Capability(name="nav", description="d", ros_action="a/b",
-                               tags=["locomotion"]))
-        r.register(Capability(name="pick", description="d", ros_action="a/c",
-                               tags=["manipulation"]))
+        r.register(Capability(name="nav", description="d", ros_action="a/b", tags=["locomotion"]))
+        r.register(
+            Capability(name="pick", description="d", ros_action="a/c", tags=["manipulation"])
+        )
         context = r.to_llm_context()
         assert "nav" in context
         assert "pick" in context
 
     def test_untagged_always_included_in_filtered_context(self):
         r = CapabilityRegistry()
-        r.register(Capability(name="nav", description="d", ros_action="a/b",
-                               tags=["locomotion"]))
+        r.register(Capability(name="nav", description="d", ros_action="a/b", tags=["locomotion"]))
         r.register(Capability(name="untagged_cap", description="d", ros_action="a/c"))
         # Filter by manipulation — nav should be excluded, untagged_cap included
         context = r.to_llm_context(tags=["manipulation"])
@@ -258,14 +270,22 @@ class TestCapabilityTagging:
 
     def test_ground_with_tag_filter(self, registry):
         import json
-        mock_response = json.dumps({
-            "feasible": True, "reason": "", "steps": [{
-                "capability_name": "navigate_to_location",
-                "parameters": {"location_name": "table"},
-                "rationale": "go",
-            }]
-        })
+
+        mock_response = json.dumps(
+            {
+                "feasible": True,
+                "reason": "",
+                "steps": [
+                    {
+                        "capability_name": "navigate_to_location",
+                        "parameters": {"location_name": "table"},
+                        "rationale": "go",
+                    }
+                ],
+            }
+        )
         from ros2_lingua_core import GroundingEngine, MockBackend
+
         engine = GroundingEngine(registry, MockBackend(mock_response), auto_chain=False)
         plan = engine.ground("go to table", tag_filter=["locomotion"])
         assert plan.feasible
@@ -283,21 +303,21 @@ class TestBackwardChaining:
 
     def test_chain_with_satisfied_precondition(self, registry):
         # If robot_is_balanced is already true, no need to stabilize
-        chain = registry.resolve_chain(
-            "navigate_to_location", current_state={"robot_is_balanced"}
-        )
+        chain = registry.resolve_chain("navigate_to_location", current_state={"robot_is_balanced"})
         names = [c.name for c in chain]
         assert names == ["navigate_to_location"]
 
     def test_unsatisfiable_precondition_raises(self):
         r = CapabilityRegistry()
-        r.register(Capability(
-            name="do_thing",
-            description="Does a thing",
-            ros_action="robot/do_thing",
-            preconditions=["impossible_condition"],
-            postconditions=[],
-        ))
+        r.register(
+            Capability(
+                name="do_thing",
+                description="Does a thing",
+                ros_action="robot/do_thing",
+                preconditions=["impossible_condition"],
+                postconditions=[],
+            )
+        )
         with pytest.raises(ValueError, match="Cannot satisfy precondition"):
             r.resolve_chain("do_thing", current_state=set())
 
@@ -306,17 +326,22 @@ class TestBackwardChaining:
 # Grounding Engine tests
 # ------------------------------------------------------------------
 
+
 class TestGroundingEngine:
     def test_successful_grounding(self, registry):
-        mock_response = json.dumps({
-            "feasible": True,
-            "reason": "",
-            "steps": [{
-                "capability_name": "navigate_to_location",
-                "parameters": {"location_name": "table"},
-                "rationale": "Go to table",
-            }],
-        })
+        mock_response = json.dumps(
+            {
+                "feasible": True,
+                "reason": "",
+                "steps": [
+                    {
+                        "capability_name": "navigate_to_location",
+                        "parameters": {"location_name": "table"},
+                        "rationale": "Go to table",
+                    }
+                ],
+            }
+        )
         engine = GroundingEngine(registry, MockBackend(mock_response), auto_chain=False)
         plan = engine.ground("go to the table")
         assert plan.feasible is True
@@ -326,15 +351,19 @@ class TestGroundingEngine:
 
     def test_auto_chain_inserts_prerequisites(self, registry):
         # LLM suggests navigate_to_location but robot_is_balanced is not set
-        mock_response = json.dumps({
-            "feasible": True,
-            "reason": "",
-            "steps": [{
-                "capability_name": "navigate_to_location",
-                "parameters": {"location_name": "table"},
-                "rationale": "Go to table",
-            }],
-        })
+        mock_response = json.dumps(
+            {
+                "feasible": True,
+                "reason": "",
+                "steps": [
+                    {
+                        "capability_name": "navigate_to_location",
+                        "parameters": {"location_name": "table"},
+                        "rationale": "Go to table",
+                    }
+                ],
+            }
+        )
         engine = GroundingEngine(registry, MockBackend(mock_response), auto_chain=True)
         # State is empty — robot_is_balanced not satisfied
         plan = engine.ground("go to the table")
@@ -345,26 +374,32 @@ class TestGroundingEngine:
         assert names.index("stabilize_robot") < names.index("navigate_to_location")
 
     def test_infeasible_plan(self, registry):
-        mock_response = json.dumps({
-            "feasible": False,
-            "reason": "No capability for flying.",
-            "steps": [],
-        })
+        mock_response = json.dumps(
+            {
+                "feasible": False,
+                "reason": "No capability for flying.",
+                "steps": [],
+            }
+        )
         engine = GroundingEngine(registry, MockBackend(mock_response))
         plan = engine.ground("fly to the moon")
         assert plan.feasible is False
         assert "flying" in plan.reason
 
     def test_hallucinated_capability_caught(self, registry):
-        mock_response = json.dumps({
-            "feasible": True,
-            "reason": "",
-            "steps": [{
-                "capability_name": "nonexistent_capability",
-                "parameters": {},
-                "rationale": "test",
-            }],
-        })
+        mock_response = json.dumps(
+            {
+                "feasible": True,
+                "reason": "",
+                "steps": [
+                    {
+                        "capability_name": "nonexistent_capability",
+                        "parameters": {},
+                        "rationale": "test",
+                    }
+                ],
+            }
+        )
         engine = GroundingEngine(registry, MockBackend(mock_response))
         plan = engine.ground("do something fake")
         assert plan.feasible is False
@@ -377,15 +412,15 @@ class TestGroundingEngine:
         assert "JSON" in plan.reason
 
 
-
-
 # ------------------------------------------------------------------
 # Robustness tests
 # ------------------------------------------------------------------
 
+
 class TestRobustness:
     def test_retry_config_defaults(self):
         from ros2_lingua_core import RetryConfig
+
         r = RetryConfig()
         assert r.max_retries == 3
         assert r.base_delay_sec == 1.0
@@ -393,6 +428,7 @@ class TestRobustness:
 
     def test_retry_config_no_retry(self):
         from ros2_lingua_core import RetryConfig
+
         r = RetryConfig.no_retry()
         assert r.max_retries == 0
 
@@ -400,15 +436,15 @@ class TestRobustness:
         import json
 
         from ros2_lingua_core import LLMTimeoutError, MockBackend
-        success_response = json.dumps({
-            "feasible": True, "reason": "", "steps": []
-        })
+
+        success_response = json.dumps({"feasible": True, "reason": "", "steps": []})
         backend = MockBackend.failing(
             LLMTimeoutError("timed out"),
             retries_before_success=2,
             success_response=success_response,
         )
         import contextlib
+
         # First 2 calls raise, 3rd succeeds
         for _ in range(2):
             with contextlib.suppress(LLMTimeoutError):
@@ -419,6 +455,7 @@ class TestRobustness:
     def test_empty_registry_returns_infeasible(self):
 
         from ros2_lingua_core import CapabilityRegistry, GroundingEngine, MockBackend
+
         r = CapabilityRegistry()
         engine = GroundingEngine(r, MockBackend("{}"), auto_chain=False)
         plan = engine.ground("do something")
@@ -436,6 +473,7 @@ class TestRobustness:
             PlanningError,
             UnsatisfiablePreconditionError,
         )
+
         assert issubclass(LLMBackendError, LinguaError)
         assert issubclass(LLMTimeoutError, LLMBackendError)
         assert issubclass(LLMRateLimitError, LLMBackendError)
@@ -446,18 +484,21 @@ class TestRobustness:
 
     def test_step_timeout_error_message(self):
         from ros2_lingua_core import StepTimeoutError
+
         e = StepTimeoutError("navigate_to_location", 10.0)
         assert "navigate_to_location" in str(e)
         assert "10.0" in str(e)
 
     def test_hallucination_error_message(self):
         from ros2_lingua_core import HallucinationError
+
         e = HallucinationError("ghost_capability")
         assert "ghost_capability" in str(e)
         assert "hallucinated" in str(e).lower()
 
     def test_unsatisfiable_precondition_error_message(self):
         from ros2_lingua_core import UnsatisfiablePreconditionError
+
         e = UnsatisfiablePreconditionError("robot_is_balanced", "navigate_to_location")
         assert "robot_is_balanced" in str(e)
         assert "navigate_to_location" in str(e)
@@ -466,14 +507,22 @@ class TestRobustness:
         import json
 
         from ros2_lingua_core import Capability, CapabilityRegistry, GroundingEngine, MockBackend
+
         r = CapabilityRegistry()
         r.register(Capability(name="nav", description="d", ros_action="a/b"))
-        mock = MockBackend(json.dumps({"feasible": True, "reason": "", "steps": [
-            {"capability_name": "nav", "parameters": {}, "rationale": "go"}
-        ]}))
+        mock = MockBackend(
+            json.dumps(
+                {
+                    "feasible": True,
+                    "reason": "",
+                    "steps": [{"capability_name": "nav", "parameters": {}, "rationale": "go"}],
+                }
+            )
+        )
         # Verify max_retries and retry params are accepted
-        engine = GroundingEngine(r, mock, auto_chain=False,
-                                  max_retries=5, retry_delay=0.1, retry_backoff=1.5)
+        engine = GroundingEngine(
+            r, mock, auto_chain=False, max_retries=5, retry_delay=0.1, retry_backoff=1.5
+        )
         plan = engine.ground("do nav")
         assert plan.feasible
 
@@ -482,12 +531,15 @@ class TestRobustness:
 # Parameter validation tests
 # ------------------------------------------------------------------
 
+
 class TestParameterValidation:
     """Tests for ParameterValidator and its integration into GroundingEngine."""
 
     def _make_cap(self, params):
         return Capability(
-            name="test_cap", description="d", ros_action="a/b",
+            name="test_cap",
+            description="d",
+            ros_action="a/b",
             parameters=params,
         )
 
@@ -495,12 +547,14 @@ class TestParameterValidation:
 
     def test_string_coercion(self):
         from ros2_lingua_core import ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("name", "string", "a name")])
         result = ParameterValidator().validate(cap, {"name": 42})
         assert result["name"] == "42"
 
     def test_float_from_int(self):
         from ros2_lingua_core import ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("speed", "float", "speed")])
         result = ParameterValidator().validate(cap, {"speed": 1})
         assert result["speed"] == 1.0
@@ -508,12 +562,14 @@ class TestParameterValidation:
 
     def test_float_from_string(self):
         from ros2_lingua_core import ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("speed", "float", "speed")])
         result = ParameterValidator().validate(cap, {"speed": "0.5"})
         assert result["speed"] == 0.5
 
     def test_float_invalid_string_fails(self):
         from ros2_lingua_core import ParameterValidationError, ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("speed", "float", "speed")])
         with pytest.raises(ParameterValidationError) as exc_info:
             ParameterValidator().validate(cap, {"speed": "fast"})
@@ -522,6 +578,7 @@ class TestParameterValidation:
 
     def test_int_from_float_whole_number(self):
         from ros2_lingua_core import ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("count", "int", "count")])
         result = ParameterValidator().validate(cap, {"count": 3.0})
         assert result["count"] == 3
@@ -529,18 +586,21 @@ class TestParameterValidation:
 
     def test_int_from_fractional_float_fails(self):
         from ros2_lingua_core import ParameterValidationError, ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("count", "int", "count")])
         with pytest.raises(ParameterValidationError):
             ParameterValidator().validate(cap, {"count": 3.5})
 
     def test_int_from_string(self):
         from ros2_lingua_core import ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("count", "integer", "count")])
         result = ParameterValidator().validate(cap, {"count": "5"})
         assert result["count"] == 5
 
     def test_bool_from_string_true(self):
         from ros2_lingua_core import ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("enabled", "bool", "flag")])
         for val in ["true", "True", "TRUE", "1", "yes"]:
             result = ParameterValidator().validate(cap, {"enabled": val})
@@ -548,6 +608,7 @@ class TestParameterValidation:
 
     def test_bool_from_string_false(self):
         from ros2_lingua_core import ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("enabled", "bool", "flag")])
         for val in ["false", "False", "FALSE", "0", "no"]:
             result = ParameterValidator().validate(cap, {"enabled": val})
@@ -555,18 +616,21 @@ class TestParameterValidation:
 
     def test_bool_invalid_string_fails(self):
         from ros2_lingua_core import ParameterValidationError, ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("enabled", "boolean", "flag")])
         with pytest.raises(ParameterValidationError):
             ParameterValidator().validate(cap, {"enabled": "maybe"})
 
     def test_list_from_json_string(self):
         from ros2_lingua_core import ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("items", "list", "items")])
         result = ParameterValidator().validate(cap, {"items": '["a", "b", "c"]'})
         assert result["items"] == ["a", "b", "c"]
 
     def test_list_invalid_json_fails(self):
         from ros2_lingua_core import ParameterValidationError, ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("items", "list", "items")])
         with pytest.raises(ParameterValidationError):
             ParameterValidator().validate(cap, {"items": "not json"})
@@ -575,6 +639,7 @@ class TestParameterValidation:
 
     def test_missing_required_fails(self):
         from ros2_lingua_core import ParameterValidationError, ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("loc", "string", "location", required=True)])
         with pytest.raises(ParameterValidationError) as exc_info:
             ParameterValidator().validate(cap, {})
@@ -582,19 +647,23 @@ class TestParameterValidation:
 
     def test_missing_optional_uses_default(self):
         from ros2_lingua_core import ParameterValidator
-        cap = self._make_cap([
-            CapabilityParameter("speed", "float", "speed", required=False, default=0.5)
-        ])
+
+        cap = self._make_cap(
+            [CapabilityParameter("speed", "float", "speed", required=False, default=0.5)]
+        )
         result = ParameterValidator().validate(cap, {})
         assert result["speed"] == 0.5
 
     def test_all_failures_reported_at_once(self):
         from ros2_lingua_core import ParameterValidationError, ParameterValidator
-        cap = self._make_cap([
-            CapabilityParameter("speed",  "float",  "speed",  required=True),
-            CapabilityParameter("name",   "string", "name",   required=True),
-            CapabilityParameter("count",  "int",    "count",  required=True),
-        ])
+
+        cap = self._make_cap(
+            [
+                CapabilityParameter("speed", "float", "speed", required=True),
+                CapabilityParameter("name", "string", "name", required=True),
+                CapabilityParameter("count", "int", "count", required=True),
+            ]
+        )
         with pytest.raises(ParameterValidationError) as exc_info:
             # speed is wrong type, name missing, count wrong type
             ParameterValidator().validate(cap, {"speed": "fast", "count": "three"})
@@ -607,9 +676,8 @@ class TestParameterValidation:
 
     def test_ros_message_type_passes_through(self):
         from ros2_lingua_core import ParameterValidator
-        cap = self._make_cap([
-            CapabilityParameter("pose", "geometry_msgs/Pose", "target pose")
-        ])
+
+        cap = self._make_cap([CapabilityParameter("pose", "geometry_msgs/Pose", "target pose")])
         pose_val = {"position": {"x": 1.0}, "orientation": {"w": 1.0}}
         result = ParameterValidator().validate(cap, {"pose": pose_val})
         assert result["pose"] == pose_val
@@ -618,6 +686,7 @@ class TestParameterValidation:
 
     def test_strict_mode_rejects_unknown_params(self):
         from ros2_lingua_core import ParameterValidationError, ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("name", "string", "name")])
         with pytest.raises(ParameterValidationError):
             ParameterValidator().validate(
@@ -626,6 +695,7 @@ class TestParameterValidation:
 
     def test_non_strict_mode_passes_unknown_params(self):
         from ros2_lingua_core import ParameterValidator
+
         cap = self._make_cap([CapabilityParameter("name", "string", "name")])
         result = ParameterValidator().validate(
             cap, {"name": "table", "extra": "value"}, strict=False
@@ -637,44 +707,70 @@ class TestParameterValidation:
 
     def test_grounding_engine_validates_params(self):
         import json
+
         r = CapabilityRegistry()
-        r.register(Capability(
-            name="navigate_to_location", description="d", ros_action="a/n",
-            parameters=[
-                CapabilityParameter("location_name", "string", "where", required=True),
-                CapabilityParameter("speed", "float", "how fast", required=False, default=0.5),
-            ],
-        ))
-        mock_response = json.dumps({
-            "feasible": True, "reason": "", "steps": [{
-                "capability_name": "navigate_to_location",
-                "parameters": {"location_name": "table", "speed": "fast"},
-                "rationale": "go",
-            }]
-        })
-        engine = GroundingEngine(r, MockBackend(mock_response), auto_chain=False, validate_params=True)
+        r.register(
+            Capability(
+                name="navigate_to_location",
+                description="d",
+                ros_action="a/n",
+                parameters=[
+                    CapabilityParameter("location_name", "string", "where", required=True),
+                    CapabilityParameter("speed", "float", "how fast", required=False, default=0.5),
+                ],
+            )
+        )
+        mock_response = json.dumps(
+            {
+                "feasible": True,
+                "reason": "",
+                "steps": [
+                    {
+                        "capability_name": "navigate_to_location",
+                        "parameters": {"location_name": "table", "speed": "fast"},
+                        "rationale": "go",
+                    }
+                ],
+            }
+        )
+        engine = GroundingEngine(
+            r, MockBackend(mock_response), auto_chain=False, validate_params=True
+        )
         plan = engine.ground("go to table")
         assert not plan.feasible
         assert "speed" in plan.reason and "fast" in plan.reason
 
     def test_grounding_engine_coerces_valid_params(self):
         import json
+
         r = CapabilityRegistry()
-        r.register(Capability(
-            name="navigate_to_location", description="d", ros_action="a/n",
-            parameters=[
-                CapabilityParameter("location_name", "string", "where", required=True),
-                CapabilityParameter("speed", "float", "how fast", required=False, default=0.5),
-            ],
-        ))
-        mock_response = json.dumps({
-            "feasible": True, "reason": "", "steps": [{
-                "capability_name": "navigate_to_location",
-                "parameters": {"location_name": "table", "speed": "0.5"},
-                "rationale": "go",
-            }]
-        })
-        engine = GroundingEngine(r, MockBackend(mock_response), auto_chain=False, validate_params=True)
+        r.register(
+            Capability(
+                name="navigate_to_location",
+                description="d",
+                ros_action="a/n",
+                parameters=[
+                    CapabilityParameter("location_name", "string", "where", required=True),
+                    CapabilityParameter("speed", "float", "how fast", required=False, default=0.5),
+                ],
+            )
+        )
+        mock_response = json.dumps(
+            {
+                "feasible": True,
+                "reason": "",
+                "steps": [
+                    {
+                        "capability_name": "navigate_to_location",
+                        "parameters": {"location_name": "table", "speed": "0.5"},
+                        "rationale": "go",
+                    }
+                ],
+            }
+        )
+        engine = GroundingEngine(
+            r, MockBackend(mock_response), auto_chain=False, validate_params=True
+        )
         plan = engine.ground("go to table")
         assert plan.feasible
         assert plan.steps[0].parameters["speed"] == 0.5
@@ -682,16 +778,22 @@ class TestParameterValidation:
 
     def test_grounding_engine_validation_disabled(self, registry):
         import json
-        mock_response = json.dumps({
-            "feasible": True, "reason": "", "steps": [{
-                "capability_name": "navigate_to_location",
-                "parameters": {"location_name": "table", "speed": "fast"},
-                "rationale": "go",
-            }]
-        })
+
+        mock_response = json.dumps(
+            {
+                "feasible": True,
+                "reason": "",
+                "steps": [
+                    {
+                        "capability_name": "navigate_to_location",
+                        "parameters": {"location_name": "table", "speed": "fast"},
+                        "rationale": "go",
+                    }
+                ],
+            }
+        )
         engine = GroundingEngine(
-            registry, MockBackend(mock_response),
-            auto_chain=False, validate_params=False
+            registry, MockBackend(mock_response), auto_chain=False, validate_params=False
         )
         plan = engine.ground("go to table")
         # With validation off, bad types pass through
@@ -703,53 +805,67 @@ class TestParameterValidation:
 # Recovery Planner tests
 # ------------------------------------------------------------------
 
+
 class TestRecoveryPlanner:
     """Tests for RecoveryPlanner, RecoveryConfig, and RecoveryDecision."""
 
     def _make_registry(self):
         """Create a registry with standard test capabilities."""
         r = CapabilityRegistry()
-        r.register(Capability(
-            name="stabilize_robot",
-            description="Stabilizes the robot",
-            ros_action="humanoid/stabilize",
-            preconditions=[],
-            postconditions=["robot_is_balanced"],
-        ))
-        r.register(Capability(
-            name="navigate_to_location",
-            description="Walks to a named location",
-            ros_action="humanoid/navigate",
-            parameters=[CapabilityParameter("location_name", "string", "where")],
-            preconditions=["robot_is_balanced"],
-            postconditions=["robot_at_location"],
-        ))
-        r.register(Capability(
-            name="pick_up_object",
-            description="Picks up an object",
-            ros_action="humanoid/pick",
-            parameters=[CapabilityParameter("object_name", "string", "what")],
-            preconditions=["robot_at_location"],
-            postconditions=["object_in_hand"],
-        ))
-        r.register(Capability(
-            name="return_to_home",
-            description="Returns the robot to home",
-            ros_action="humanoid/home",
-            preconditions=[],
-            postconditions=["robot_at_home"],
-        ))
+        r.register(
+            Capability(
+                name="stabilize_robot",
+                description="Stabilizes the robot",
+                ros_action="humanoid/stabilize",
+                preconditions=[],
+                postconditions=["robot_is_balanced"],
+            )
+        )
+        r.register(
+            Capability(
+                name="navigate_to_location",
+                description="Walks to a named location",
+                ros_action="humanoid/navigate",
+                parameters=[CapabilityParameter("location_name", "string", "where")],
+                preconditions=["robot_is_balanced"],
+                postconditions=["robot_at_location"],
+            )
+        )
+        r.register(
+            Capability(
+                name="pick_up_object",
+                description="Picks up an object",
+                ros_action="humanoid/pick",
+                parameters=[CapabilityParameter("object_name", "string", "what")],
+                preconditions=["robot_at_location"],
+                postconditions=["object_in_hand"],
+            )
+        )
+        r.register(
+            Capability(
+                name="return_to_home",
+                description="Returns the robot to home",
+                ros_action="humanoid/home",
+                preconditions=[],
+                postconditions=["robot_at_home"],
+            )
+        )
         return r
 
     def _make_engine(self, registry, plan_steps):
         """Create a GroundingEngine with a MockBackend returning the given steps."""
-        mock_response = json.dumps({
-            "feasible": True, "reason": "",
-            "steps": plan_steps,
-        })
+        mock_response = json.dumps(
+            {
+                "feasible": True,
+                "reason": "",
+                "steps": plan_steps,
+            }
+        )
         return GroundingEngine(
-            registry, MockBackend(mock_response),
-            auto_chain=False, validate_params=False,
+            registry,
+            MockBackend(mock_response),
+            auto_chain=False,
+            validate_params=False,
         )
 
     def _failed_step(self, cap_name="pick_up_object", params=None):
@@ -762,6 +878,7 @@ class TestRecoveryPlanner:
 
     def test_recovery_config_defaults(self):
         from ros2_lingua_core import RecoveryConfig
+
         config = RecoveryConfig()
         assert config.max_retries == 2
         assert config.enable_replan is True
@@ -771,6 +888,7 @@ class TestRecoveryPlanner:
 
     def test_recovery_config_no_replan(self):
         from ros2_lingua_core import RecoveryConfig
+
         config = RecoveryConfig(enable_replan=False)
         assert config.enable_replan is False
 
@@ -778,6 +896,7 @@ class TestRecoveryPlanner:
 
     def test_recovery_decision_dataclass(self):
         from ros2_lingua_core import RecoveryDecision
+
         d = RecoveryDecision(strategy="retry", reason="testing")
         assert d.strategy == "retry"
         assert d.new_plan is None
@@ -787,6 +906,7 @@ class TestRecoveryPlanner:
 
     def test_retry_decision_on_first_failure(self):
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         planner = RecoveryPlanner(RecoveryConfig(max_retries=2))
         decision = planner.on_step_failed(
             failed_step=self._failed_step(),
@@ -801,51 +921,58 @@ class TestRecoveryPlanner:
     def test_retry_exhaustion_leads_to_replan(self):
         """After max retries, should escalate to replan."""
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         registry = self._make_registry()
-        engine = self._make_engine(registry, [
-            {"capability_name": "pick_up_object",
-             "parameters": {"object_name": "bottle"}, "rationale": "pick"},
-        ])
+        engine = self._make_engine(
+            registry,
+            [
+                {
+                    "capability_name": "pick_up_object",
+                    "parameters": {"object_name": "bottle"},
+                    "rationale": "pick",
+                },
+            ],
+        )
         planner = RecoveryPlanner(
             RecoveryConfig(max_retries=1, enable_replan=True),
             grounding_engine=engine,
             registry=registry,
         )
         # First failure → retry
-        d1 = planner.on_step_failed(
-            self._failed_step(), 0, "pick up", set(), "fail"
-        )
+        d1 = planner.on_step_failed(self._failed_step(), 0, "pick up", set(), "fail")
         assert d1.strategy == "retry"
         # Second failure → replan (retries exhausted)
-        d2 = planner.on_step_failed(
-            self._failed_step(), 0, "pick up", set(), "fail again"
-        )
+        d2 = planner.on_step_failed(self._failed_step(), 0, "pick up", set(), "fail again")
         assert d2.strategy == "replan"
 
     def test_retry_count_tracks_per_step(self):
         """Each step has independent retry counters."""
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         planner = RecoveryPlanner(RecoveryConfig(max_retries=1))
         # Step 0 fails once → retry
-        d0 = planner.on_step_failed(
-            self._failed_step("step_a"), 0, "instr", set(), "err"
-        )
+        d0 = planner.on_step_failed(self._failed_step("step_a"), 0, "instr", set(), "err")
         assert d0.strategy == "retry"
         # Step 1 also gets its own retry
-        d1 = planner.on_step_failed(
-            self._failed_step("step_b"), 1, "instr", set(), "err"
-        )
+        d1 = planner.on_step_failed(self._failed_step("step_b"), 1, "instr", set(), "err")
         assert d1.strategy == "retry"
 
     # ── Replan strategy ───────────────────────────────────────
 
     def test_replan_returns_new_plan(self):
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         registry = self._make_registry()
-        engine = self._make_engine(registry, [
-            {"capability_name": "navigate_to_location",
-             "parameters": {"location_name": "kitchen"}, "rationale": "go"},
-        ])
+        engine = self._make_engine(
+            registry,
+            [
+                {
+                    "capability_name": "navigate_to_location",
+                    "parameters": {"location_name": "kitchen"},
+                    "rationale": "go",
+                },
+            ],
+        )
         planner = RecoveryPlanner(
             RecoveryConfig(max_retries=0, enable_replan=True),
             grounding_engine=engine,
@@ -862,18 +989,28 @@ class TestRecoveryPlanner:
     def test_replan_skips_completed_steps(self):
         """When replanning with updated state, backward chainer skips done work."""
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         registry = self._make_registry()
         # The mock response returns only pick_up — the engine with auto_chain=True
         # would insert stabilize + navigate, but since the state already has those
         # postconditions, they should be skipped
         engine_with_chain = GroundingEngine(
             registry,
-            MockBackend(json.dumps({
-                "feasible": True, "reason": "", "steps": [
-                    {"capability_name": "pick_up_object",
-                     "parameters": {"object_name": "bottle"}, "rationale": "pick"},
-                ]
-            })),
+            MockBackend(
+                json.dumps(
+                    {
+                        "feasible": True,
+                        "reason": "",
+                        "steps": [
+                            {
+                                "capability_name": "pick_up_object",
+                                "parameters": {"object_name": "bottle"},
+                                "rationale": "pick",
+                            },
+                        ],
+                    }
+                )
+            ),
             auto_chain=True,
             validate_params=False,
         )
@@ -885,9 +1022,11 @@ class TestRecoveryPlanner:
         # State already has stabilize and navigate postconditions
         state = {"robot_is_balanced", "robot_at_location"}
         decision = planner.on_step_failed(
-            self._failed_step(), 0,
+            self._failed_step(),
+            0,
             "pick up the bottle from the table",
-            state, "gripper error",
+            state,
+            "gripper error",
         )
         assert decision.strategy == "replan"
         # The new plan should NOT include stabilize_robot or navigate_to_location
@@ -899,6 +1038,7 @@ class TestRecoveryPlanner:
 
     def test_replan_disabled_goes_to_fallback(self):
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         planner = RecoveryPlanner(
             RecoveryConfig(
                 max_retries=0,
@@ -906,14 +1046,13 @@ class TestRecoveryPlanner:
                 safe_fallback="return_to_home",
             ),
         )
-        decision = planner.on_step_failed(
-            self._failed_step(), 0, "do thing", set(), "error"
-        )
+        decision = planner.on_step_failed(self._failed_step(), 0, "do thing", set(), "error")
         assert decision.strategy == "fallback"
 
     def test_recovery_planner_without_engine(self):
         """Replan is skipped when no grounding engine is provided."""
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         planner = RecoveryPlanner(
             RecoveryConfig(
                 max_retries=0,
@@ -921,9 +1060,7 @@ class TestRecoveryPlanner:
                 safe_fallback="return_to_home",
             ),
         )
-        decision = planner.on_step_failed(
-            self._failed_step(), 0, "instr", set(), "err"
-        )
+        decision = planner.on_step_failed(self._failed_step(), 0, "instr", set(), "err")
         # Should skip replan and go to fallback
         assert decision.strategy == "fallback"
 
@@ -931,6 +1068,7 @@ class TestRecoveryPlanner:
 
     def test_fallback_decision(self):
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         planner = RecoveryPlanner(
             RecoveryConfig(
                 max_retries=0,
@@ -938,15 +1076,14 @@ class TestRecoveryPlanner:
                 safe_fallback="return_to_home",
             ),
         )
-        decision = planner.on_step_failed(
-            self._failed_step(), 0, "instr", set(), "err"
-        )
+        decision = planner.on_step_failed(self._failed_step(), 0, "instr", set(), "err")
         assert decision.strategy == "fallback"
         assert "return_to_home" in decision.reason
 
     def test_fallback_with_registry_validation(self):
         """Fallback capability must exist in registry when registry is provided."""
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         registry = self._make_registry()
         planner = RecoveryPlanner(
             RecoveryConfig(
@@ -956,9 +1093,7 @@ class TestRecoveryPlanner:
             ),
             registry=registry,
         )
-        decision = planner.on_step_failed(
-            self._failed_step(), 0, "instr", set(), "err"
-        )
+        decision = planner.on_step_failed(self._failed_step(), 0, "instr", set(), "err")
         # Fallback not registered → abort
         assert decision.strategy == "abort"
 
@@ -966,6 +1101,7 @@ class TestRecoveryPlanner:
 
     def test_no_fallback_goes_to_abort(self):
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         planner = RecoveryPlanner(
             RecoveryConfig(
                 max_retries=0,
@@ -973,19 +1109,16 @@ class TestRecoveryPlanner:
                 safe_fallback=None,
             ),
         )
-        decision = planner.on_step_failed(
-            self._failed_step(), 0, "instr", set(), "err"
-        )
+        decision = planner.on_step_failed(self._failed_step(), 0, "instr", set(), "err")
         assert decision.strategy == "abort"
 
     def test_abort_decision_has_reason(self):
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         planner = RecoveryPlanner(
             RecoveryConfig(max_retries=0, enable_replan=False),
         )
-        decision = planner.on_step_failed(
-            self._failed_step(), 0, "instr", set(), "some error"
-        )
+        decision = planner.on_step_failed(self._failed_step(), 0, "instr", set(), "some error")
         assert decision.strategy == "abort"
         assert "exhausted" in decision.reason.lower()
         assert "some error" in decision.reason
@@ -994,6 +1127,7 @@ class TestRecoveryPlanner:
 
     def test_recovery_exhausted_error(self):
         from ros2_lingua_core import RecoveryExhaustedError
+
         e = RecoveryExhaustedError("pick_up_object", ["retry", "replan"])
         assert "pick_up_object" in str(e)
         assert "retry" in str(e)
@@ -1005,18 +1139,15 @@ class TestRecoveryPlanner:
 
     def test_reset_clears_retry_counts(self):
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         planner = RecoveryPlanner(RecoveryConfig(max_retries=1))
         # Use up the retry for step 0
-        d1 = planner.on_step_failed(
-            self._failed_step(), 0, "instr", set(), "err"
-        )
+        d1 = planner.on_step_failed(self._failed_step(), 0, "instr", set(), "err")
         assert d1.strategy == "retry"
         # Reset
         planner.reset()
         # Now step 0 should get a fresh retry
-        d2 = planner.on_step_failed(
-            self._failed_step(), 0, "instr", set(), "err"
-        )
+        d2 = planner.on_step_failed(self._failed_step(), 0, "instr", set(), "err")
         assert d2.strategy == "retry"
 
     # ── Multiple step failures ────────────────────────────────
@@ -1024,31 +1155,42 @@ class TestRecoveryPlanner:
     def test_multiple_step_failures(self):
         """Different steps can fail and recover independently."""
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         planner = RecoveryPlanner(RecoveryConfig(max_retries=1))
         # Step 0 fails → retry
-        assert planner.on_step_failed(
-            self._failed_step("step_a"), 0, "instr", set(), "err"
-        ).strategy == "retry"
+        assert (
+            planner.on_step_failed(self._failed_step("step_a"), 0, "instr", set(), "err").strategy
+            == "retry"
+        )
         # Step 0 fails again → escalate (no engine, no fallback → abort)
-        assert planner.on_step_failed(
-            self._failed_step("step_a"), 0, "instr", set(), "err"
-        ).strategy == "abort"
+        assert (
+            planner.on_step_failed(self._failed_step("step_a"), 0, "instr", set(), "err").strategy
+            == "abort"
+        )
         # Step 2 fails → retry (independent counter)
-        assert planner.on_step_failed(
-            self._failed_step("step_c"), 2, "instr", set(), "err"
-        ).strategy == "retry"
+        assert (
+            planner.on_step_failed(self._failed_step("step_c"), 2, "instr", set(), "err").strategy
+            == "retry"
+        )
 
     # ── Replan with partial state ─────────────────────────────
 
     def test_replan_with_partial_state(self):
         """After 2/4 steps complete, replan only plans remaining work."""
         from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
         registry = self._make_registry()
         # Mock engine returns the single remaining step
-        engine = self._make_engine(registry, [
-            {"capability_name": "pick_up_object",
-             "parameters": {"object_name": "cup"}, "rationale": "pick"},
-        ])
+        engine = self._make_engine(
+            registry,
+            [
+                {
+                    "capability_name": "pick_up_object",
+                    "parameters": {"object_name": "cup"},
+                    "rationale": "pick",
+                },
+            ],
+        )
         planner = RecoveryPlanner(
             RecoveryConfig(max_retries=0, enable_replan=True),
             grounding_engine=engine,
@@ -1066,4 +1208,3 @@ class TestRecoveryPlanner:
         assert decision.strategy == "replan"
         assert len(decision.new_plan.steps) == 1
         assert decision.new_plan.steps[0].capability_name == "pick_up_object"
-

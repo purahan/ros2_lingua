@@ -26,38 +26,51 @@ Hierarchy:
 
 class LinguaError(Exception):
     """Base class for all ros2_lingua errors."""
+
     pass
 
 
 # --- LLM Backend Errors ---
 
+
 class LLMBackendError(LinguaError):
     """Raised when an LLM backend call fails for any reason."""
+
     def __init__(self, message: str, original: Exception = None):
         super().__init__(message)
         self.original = original
 
+
 class LLMTimeoutError(LLMBackendError):
     """Raised when the LLM backend does not respond within the timeout."""
+
     pass
+
 
 class LLMRateLimitError(LLMBackendError):
     """Raised when the LLM API rate limit is exceeded."""
+
     pass
+
 
 class LLMModelNotFoundError(LLMBackendError):
     """Raised when the specified model does not exist on the backend."""
+
     pass
 
 
 # --- Grounding Errors ---
 
+
 class GroundingError(LinguaError):
     """Raised when the grounding engine cannot produce a valid plan."""
+
     pass
+
 
 class HallucinationError(GroundingError):
     """Raised when the LLM references a capability that is not registered."""
+
     def __init__(self, capability_name: str):
         self.capability_name = capability_name
         super().__init__(
@@ -65,8 +78,10 @@ class HallucinationError(GroundingError):
             "it is not registered in the CapabilityRegistry."
         )
 
+
 class InfeasibleError(GroundingError):
     """Raised when the LLM determines the instruction cannot be executed."""
+
     def __init__(self, reason: str):
         self.reason = reason
         super().__init__(f"Instruction is not feasible: {reason}")
@@ -89,24 +104,26 @@ class ParameterValidationError(GroundingError):
             ]
         )
     """
+
     def __init__(self, capability_name: str, failures: list):
         self.capability_name = capability_name
         self.failures = failures
         failures_str = "\n  ".join(failures)
-        super().__init__(
-            f"Parameter validation failed for '{capability_name}':\n"
-            f"  {failures_str}"
-        )
+        super().__init__(f"Parameter validation failed for '{capability_name}':\n  {failures_str}")
 
 
 # --- Planning Errors ---
 
+
 class PlanningError(LinguaError):
     """Raised when the backward-chaining planner cannot build a valid plan."""
+
     pass
+
 
 class UnsatisfiablePreconditionError(PlanningError):
     """Raised when a precondition cannot be satisfied by any registered capability."""
+
     def __init__(self, precondition: str, required_by: str):
         self.precondition = precondition
         self.required_by = required_by
@@ -116,41 +133,46 @@ class UnsatisfiablePreconditionError(PlanningError):
             "No registered capability produces this state token."
         )
 
+
 class CircularDependencyError(PlanningError):
     """Raised when capability dependencies form a cycle."""
+
     pass
 
 
 # --- Dispatcher Errors ---
 
+
 class DispatchError(LinguaError):
     """Raised when a capability cannot be dispatched to the robot."""
+
     pass
+
 
 class StepTimeoutError(DispatchError):
     """Raised when a capability step does not complete within the timeout."""
+
     def __init__(self, capability_name: str, timeout_sec: float):
         self.capability_name = capability_name
         self.timeout_sec = timeout_sec
-        super().__init__(
-            f"Step '{capability_name}' did not complete within {timeout_sec}s."
-        )
+        super().__init__(f"Step '{capability_name}' did not complete within {timeout_sec}s.")
+
 
 class StepFailedError(DispatchError):
     """Raised when a capability step returns a failure result."""
+
     def __init__(self, capability_name: str, reason: str = ""):
         self.capability_name = capability_name
         self.reason = reason
-        super().__init__(
-            f"Step '{capability_name}' failed" + (f": {reason}" if reason else ".")
-        )
+        super().__init__(f"Step '{capability_name}' failed" + (f": {reason}" if reason else "."))
+
 
 class RecoveryExhaustedError(DispatchError):
     """Raised when all recovery strategies have been exhausted for a failed step."""
+
     def __init__(self, capability_name: str, strategies_tried: list):
         self.capability_name = capability_name
         self.strategies_tried = strategies_tried
         super().__init__(
-            f"Recovery exhausted for '{capability_name}'. "
-            f"Tried: {', '.join(strategies_tried)}"
+            f"Recovery exhausted for '{capability_name}'. Tried: {', '.join(strategies_tried)}"
         )

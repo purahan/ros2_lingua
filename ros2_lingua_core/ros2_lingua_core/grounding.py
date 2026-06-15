@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 # LLM Backend Protocol
 # ------------------------------------------------------------------
 
+
 class LLMBackend(Protocol):
     """
     Any object that implements this protocol can be used as the LLM
@@ -60,6 +61,7 @@ class LLMBackend(Protocol):
 # Action Plan structures
 # ------------------------------------------------------------------
 
+
 @dataclass
 class ActionStep:
     """
@@ -69,6 +71,7 @@ class ActionStep:
     parameters: The resolved parameter values for this call
     rationale: Why the LLM chose this step (useful for debugging/demo)
     """
+
     capability_name: str
     parameters: dict[str, Any]
     rationale: str = ""
@@ -91,6 +94,7 @@ class ActionPlan:
     feasible: False if the engine determined the plan cannot be executed
     reason: If not feasible, explains why
     """
+
     steps: list[ActionStep]
     original_instruction: str
     feasible: bool = True
@@ -178,15 +182,15 @@ class GroundingEngine:
             strict_params:   If True, reject unknown parameters in LLM responses.
                              If False (default), pass unknown params through unchanged.
         """
-        self._registry        = registry
-        self._backend         = backend
-        self._auto_chain      = auto_chain
-        self._max_retries     = max_retries
-        self._retry_delay     = retry_delay
-        self._retry_backoff   = retry_backoff
+        self._registry = registry
+        self._backend = backend
+        self._auto_chain = auto_chain
+        self._max_retries = max_retries
+        self._retry_delay = retry_delay
+        self._retry_backoff = retry_backoff
         self._validate_params = validate_params
-        self._strict_params   = strict_params
-        self._validator       = ParameterValidator() if validate_params else None
+        self._strict_params = strict_params
+        self._validator = ParameterValidator() if validate_params else None
 
     def ground(self, instruction: str, tag_filter: list[str] | None = None) -> ActionPlan:
         """
@@ -217,9 +221,7 @@ class GroundingEngine:
             )
 
         capability_context = self._registry.to_llm_context(tags=tag_filter)
-        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-            capability_context=capability_context
-        )
+        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(capability_context=capability_context)
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": instruction},
@@ -274,8 +276,7 @@ class GroundingEngine:
             original_instruction=instruction,
             feasible=False,
             reason=(
-                f"Grounding failed after {self._max_retries} attempts. "
-                f"Last error: {last_error}"
+                f"Grounding failed after {self._max_retries} attempts. Last error: {last_error}"
             ),
         )
 
@@ -337,11 +338,13 @@ class GroundingEngine:
                     coerced = self._validator.validate(
                         cap, step.parameters, strict=self._strict_params
                     )
-                    validated_steps.append(ActionStep(
-                        capability_name=step.capability_name,
-                        parameters=coerced,
-                        rationale=step.rationale,
-                    ))
+                    validated_steps.append(
+                        ActionStep(
+                            capability_name=step.capability_name,
+                            parameters=coerced,
+                            rationale=step.rationale,
+                        )
+                    )
                 except ParameterValidationError as e:
                     validation_failures.append(str(e))
 
@@ -350,10 +353,7 @@ class GroundingEngine:
                     steps=[],
                     original_instruction=instruction,
                     feasible=False,
-                    reason=(
-                        "Parameter validation failed:\n" +
-                        "\n".join(validation_failures)
-                    ),
+                    reason=("Parameter validation failed:\n" + "\n".join(validation_failures)),
                 )
             steps = validated_steps
 
@@ -389,14 +389,13 @@ class GroundingEngine:
                     # which is already in our plan as 'step')
                     for prerequisite_cap in chain[:-1]:
                         already_planned = any(
-                            s.capability_name == prerequisite_cap.name
-                            for s in final_steps
+                            s.capability_name == prerequisite_cap.name for s in final_steps
                         )
                         if not already_planned:
                             final_steps.append(
                                 ActionStep(
                                     capability_name=prerequisite_cap.name,
-                                    parameters={},   # will use defaults
+                                    parameters={},  # will use defaults
                                     rationale=f"Auto-inserted prerequisite for '{step.capability_name}'",
                                 )
                             )

@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ------------------------------------------------------------------
 
+
 @dataclass
 class RecoveryConfig:
     """
@@ -50,6 +51,7 @@ class RecoveryConfig:
             safe_fallback="return_to_home",
         )
     """
+
     max_retries: int = 2
     enable_replan: bool = True
     safe_fallback: str | None = None
@@ -60,6 +62,7 @@ class RecoveryConfig:
 # ------------------------------------------------------------------
 # Decision output
 # ------------------------------------------------------------------
+
 
 @dataclass
 class RecoveryDecision:
@@ -72,7 +75,8 @@ class RecoveryDecision:
                    None otherwise.
         reason:    Human-readable explanation of why this strategy was chosen.
     """
-    strategy: str       # "retry" | "replan" | "fallback" | "abort"
+
+    strategy: str  # "retry" | "replan" | "fallback" | "abort"
     new_plan: Any = None  # Optional ActionPlan (avoiding circular import)
     reason: str = ""
 
@@ -80,6 +84,7 @@ class RecoveryDecision:
 # ------------------------------------------------------------------
 # Recovery Planner
 # ------------------------------------------------------------------
+
 
 class RecoveryPlanner:
     """
@@ -173,8 +178,7 @@ class RecoveryPlanner:
             self._retry_counts[step_index] = retries_used + 1
             attempt = retries_used + 1
             logger.info(
-                f"Recovery: retrying '{cap_name}' "
-                f"(attempt {attempt}/{self._config.max_retries})"
+                f"Recovery: retrying '{cap_name}' (attempt {attempt}/{self._config.max_retries})"
             )
             return RecoveryDecision(
                 strategy="retry",
@@ -196,9 +200,7 @@ class RecoveryPlanner:
                 # which postconditions are already satisfied
                 if self._registry is not None:
                     self._registry.update_state(current_state)
-                new_plan = self._engine.ground(
-                    original_instruction, tag_filter=tag_filter
-                )
+                new_plan = self._engine.ground(original_instruction, tag_filter=tag_filter)
                 if new_plan.feasible and new_plan.steps:
                     return RecoveryDecision(
                         strategy="replan",
@@ -210,10 +212,7 @@ class RecoveryPlanner:
                         ),
                     )
                 else:
-                    logger.warning(
-                        f"Recovery: replan returned infeasible plan — "
-                        f"{new_plan.reason}"
-                    )
+                    logger.warning(f"Recovery: replan returned infeasible plan — {new_plan.reason}")
                     strategies_tried.append("replan")
             except Exception as e:
                 logger.error(f"Recovery: replanning failed — {e}")
@@ -221,8 +220,7 @@ class RecoveryPlanner:
         elif self._config.enable_replan:
             # Replan enabled but no engine available
             logger.warning(
-                "Recovery: replan enabled but no grounding engine provided. "
-                "Skipping replan."
+                "Recovery: replan enabled but no grounding engine provided. Skipping replan."
             )
             strategies_tried.append("replan (no engine)")
         else:
@@ -240,10 +238,7 @@ class RecoveryPlanner:
                     )
                     strategies_tried.append("fallback (not registered)")
                 else:
-                    logger.info(
-                        f"Recovery: executing fallback "
-                        f"'{self._config.safe_fallback}'"
-                    )
+                    logger.info(f"Recovery: executing fallback '{self._config.safe_fallback}'")
                     return RecoveryDecision(
                         strategy="fallback",
                         reason=(
@@ -270,9 +265,7 @@ class RecoveryPlanner:
             strategies_tried.append("fallback (not configured)")
 
         # ── Strategy 4: Abort ─────────────────────────────────────
-        logger.error(
-            f"Recovery: all strategies exhausted for '{cap_name}'. Aborting."
-        )
+        logger.error(f"Recovery: all strategies exhausted for '{cap_name}'. Aborting.")
         return RecoveryDecision(
             strategy="abort",
             reason=(

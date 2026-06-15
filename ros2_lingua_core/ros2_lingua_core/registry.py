@@ -10,7 +10,6 @@ It also handles:
 - Dependency resolution (chaining capabilities via pre/postconditions)
 """
 
-
 from .schema import Capability
 
 
@@ -47,8 +46,7 @@ class CapabilityRegistry:
         capability.validate()
         if capability.name in self._capabilities:
             raise ValueError(
-                f"Capability '{capability.name}' is already registered. "
-                "Use update() to replace it."
+                f"Capability '{capability.name}' is already registered. Use update() to replace it."
             )
         self._capabilities[capability.name] = capability
 
@@ -101,15 +99,9 @@ class CapabilityRegistry:
             caps = registry.get_by_tags(["manipulation", "speech"], match="any")
         """
         if match == "all":
-            return [
-                c for c in self._capabilities.values()
-                if all(t in c.tags for t in tags)
-            ]
+            return [c for c in self._capabilities.values() if all(t in c.tags for t in tags)]
         else:  # "any"
-            return [
-                c for c in self._capabilities.values()
-                if any(t in c.tags for t in tags)
-            ]
+            return [c for c in self._capabilities.values() if any(t in c.tags for t in tags)]
 
     def get_all_tags(self) -> list[str]:
         """Return a sorted list of all unique tags currently in the registry."""
@@ -204,8 +196,7 @@ class CapabilityRegistry:
         """
         if depth > max_depth:
             raise RecursionError(
-                f"Dependency chain exceeded max depth of {max_depth}. "
-                "Possible circular dependency."
+                f"Dependency chain exceeded max depth of {max_depth}. Possible circular dependency."
             )
 
         # Find unsatisfied preconditions

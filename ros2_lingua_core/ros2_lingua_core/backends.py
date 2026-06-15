@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # Retry configuration
 # ------------------------------------------------------------------
 
+
 @dataclass
 class RetryConfig:
     """
@@ -46,6 +47,7 @@ class RetryConfig:
         retry_on_timeout: Whether to retry on timeout errors
         retry_on_rate_limit: Whether to retry on rate limit errors
     """
+
     max_retries: int = 3
     base_delay_sec: float = 1.0
     backoff_factor: float = 2.0
@@ -80,7 +82,7 @@ def _with_retry(fn, retry_config: RetryConfig, backend_name: str):
                 raise
             logger.warning(
                 f"[{backend_name}] Rate limit hit. "
-                f"Retrying in {delay:.1f}s (attempt {attempt+1}/{retry_config.max_retries})..."
+                f"Retrying in {delay:.1f}s (attempt {attempt + 1}/{retry_config.max_retries})..."
             )
         except LLMTimeoutError as e:
             last_error = e
@@ -88,7 +90,7 @@ def _with_retry(fn, retry_config: RetryConfig, backend_name: str):
                 raise
             logger.warning(
                 f"[{backend_name}] Timeout. "
-                f"Retrying in {delay:.1f}s (attempt {attempt+1}/{retry_config.max_retries})..."
+                f"Retrying in {delay:.1f}s (attempt {attempt + 1}/{retry_config.max_retries})..."
             )
         except LLMModelNotFoundError:
             # Never retry model-not-found — it won't fix itself
@@ -99,7 +101,7 @@ def _with_retry(fn, retry_config: RetryConfig, backend_name: str):
                 raise
             logger.warning(
                 f"[{backend_name}] Error: {e}. "
-                f"Retrying in {delay:.1f}s (attempt {attempt+1}/{retry_config.max_retries})..."
+                f"Retrying in {delay:.1f}s (attempt {attempt + 1}/{retry_config.max_retries})..."
             )
 
         time.sleep(delay)
@@ -111,6 +113,7 @@ def _with_retry(fn, retry_config: RetryConfig, backend_name: str):
 # ------------------------------------------------------------------
 # OpenAI Backend
 # ------------------------------------------------------------------
+
 
 class OpenAIBackend:
     """
@@ -134,8 +137,7 @@ class OpenAIBackend:
             from openai import OpenAI
         except ImportError:
             raise ImportError(
-                "openai package is required for OpenAIBackend. "
-                "Install with: pip install openai"
+                "openai package is required for OpenAIBackend. Install with: pip install openai"
             ) from None
         self._client = OpenAI(api_key=api_key, timeout=timeout_sec)  # type: ignore
         self._model = model
@@ -169,6 +171,7 @@ class OpenAIBackend:
 # ------------------------------------------------------------------
 # Anthropic Backend
 # ------------------------------------------------------------------
+
 
 class AnthropicBackend:
     """
@@ -239,6 +242,7 @@ class AnthropicBackend:
 # Ollama Backend
 # ------------------------------------------------------------------
 
+
 class OllamaBackend:
     """
     LLM backend using a locally running Ollama instance.
@@ -259,11 +263,11 @@ class OllamaBackend:
     ):
         try:
             import ollama as _ollama
+
             self._ollama = _ollama
         except ImportError:
             raise ImportError(
-                "ollama package is required for OllamaBackend. "
-                "Install with: pip install ollama"
+                "ollama package is required for OllamaBackend. Install with: pip install ollama"
             ) from None
         self._model = model
         self._host = host
@@ -304,6 +308,7 @@ class OllamaBackend:
 # ------------------------------------------------------------------
 # Mock Backend
 # ------------------------------------------------------------------
+
 
 class MockBackend:
     """

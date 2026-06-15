@@ -28,7 +28,18 @@ from .schema import Capability, CapabilityParameter
 
 # Types that ros2_lingua validates natively.
 # Anything not in this set is treated as a ROS message type and passed through.
-_NATIVE_TYPES = {"string", "str", "float", "double", "int", "integer", "bool", "boolean", "list", "array"}
+_NATIVE_TYPES = {
+    "string",
+    "str",
+    "float",
+    "double",
+    "int",
+    "integer",
+    "bool",
+    "boolean",
+    "list",
+    "array",
+}
 
 
 class ParameterValidator:
@@ -74,9 +85,7 @@ class ParameterValidator:
 
             if value is None:
                 if param_def.required:
-                    failures.append(
-                        f"'{param_def.name}': required parameter is missing"
-                    )
+                    failures.append(f"'{param_def.name}': required parameter is missing")
                     continue
                 else:
                     # Use default — skip validation
@@ -94,8 +103,7 @@ class ParameterValidator:
             for key in parameters:
                 if key not in defined_names:
                     failures.append(
-                        f"'{key}': unknown parameter "
-                        f"(not defined in capability schema)"
+                        f"'{key}': unknown parameter (not defined in capability schema)"
                     )
         else:
             # Pass through any extra parameters not in the schema
@@ -135,7 +143,7 @@ class ParameterValidator:
 
         for i, step in enumerate(steps):
             cap_name = step.get("capability_name", "")
-            params   = step.get("parameters", {})
+            params = step.get("parameters", {})
 
             cap = capability_lookup.get(cap_name)
             if cap is None:
@@ -164,9 +172,7 @@ class ParameterValidator:
     # Type coercion
     # ------------------------------------------------------------------
 
-    def _coerce(
-        self, value: Any, param_def: CapabilityParameter
-    ) -> tuple[Any, str | None]:
+    def _coerce(self, value: Any, param_def: CapabilityParameter) -> tuple[Any, str | None]:
         """
         Attempt to coerce value to the expected type.
 
@@ -211,12 +217,9 @@ class ParameterValidator:
                 return float(value), None
             except ValueError:
                 return None, (
-                    f"expected float, got str ('{value}'). "
-                    f"Examples of valid values: 0.5, 1.0, 2"
+                    f"expected float, got str ('{value}'). Examples of valid values: 0.5, 1.0, 2"
                 )
-        return None, (
-            f"expected float, got {type(value).__name__} ('{value}')"
-        )
+        return None, (f"expected float, got {type(value).__name__} ('{value}')")
 
     def _to_int(self, value, param_def):
         if isinstance(value, int) and not isinstance(value, bool):
@@ -224,27 +227,20 @@ class ParameterValidator:
         if isinstance(value, float):
             if value == int(value):
                 return int(value), None
-            return None, (
-                f"expected int, got float ({value}) — "
-                f"fractional values are not allowed"
-            )
+            return None, (f"expected int, got float ({value}) — fractional values are not allowed")
         if isinstance(value, str):
             try:
                 f = float(value)
                 if f == int(f):
                     return int(f), None
                 return None, (
-                    f"expected int, got str ('{value}') — "
-                    f"fractional values are not allowed"
+                    f"expected int, got str ('{value}') — fractional values are not allowed"
                 )
             except ValueError:
                 return None, (
-                    f"expected int, got str ('{value}'). "
-                    f"Examples of valid values: 1, 5, 10"
+                    f"expected int, got str ('{value}'). Examples of valid values: 1, 5, 10"
                 )
-        return None, (
-            f"expected int, got {type(value).__name__} ('{value}')"
-        )
+        return None, (f"expected int, got {type(value).__name__} ('{value}')")
 
     def _to_bool(self, value, param_def):
         if isinstance(value, bool):
@@ -257,19 +253,15 @@ class ParameterValidator:
                 return True, None
             if lower in ("false", "0", "no", "off"):
                 return False, None
-            return None, (
-                f"expected bool, got str ('{value}'). "
-                f"Valid values: true, false, 1, 0"
-            )
-        return None, (
-            f"expected bool, got {type(value).__name__} ('{value}')"
-        )
+            return None, (f"expected bool, got str ('{value}'). Valid values: true, false, 1, 0")
+        return None, (f"expected bool, got {type(value).__name__} ('{value}')")
 
     def _to_list(self, value, param_def):
         if isinstance(value, list):
             return value, None
         if isinstance(value, str):
             import json
+
             try:
                 parsed = json.loads(value)
                 if isinstance(parsed, list):
@@ -281,11 +273,9 @@ class ParameterValidator:
             except json.JSONDecodeError:
                 return None, (
                     f"expected list, got str ('{value}'). "
-                    f"Must be a valid JSON array, e.g. [\"a\", \"b\"]"
+                    f'Must be a valid JSON array, e.g. ["a", "b"]'
                 )
-        return None, (
-            f"expected list, got {type(value).__name__} ('{value}')"
-        )
+        return None, (f"expected list, got {type(value).__name__} ('{value}')")
 
 
 # Module-level singleton for convenience

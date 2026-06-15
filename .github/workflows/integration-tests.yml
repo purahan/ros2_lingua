@@ -51,7 +51,7 @@ jobs:
         run: |
           rosdep update --rosdistro ${{ matrix.ros_distro }}
           rosdep install \
-            --from-paths ros2_lingua ros2_lingua_interfaces ros2_lingua_mock \
+            --from-paths . \
             --ignore-src \
             --rosdistro ${{ matrix.ros_distro }} \
             -y

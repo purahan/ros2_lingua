@@ -46,6 +46,16 @@ jobs:
         run: |
           pip3 install -e "ros2_lingua_core[dev]"
 
+      - name: Install ROS 2 package dependencies via rosdep
+        shell: bash
+        run: |
+          rosdep update --rosdistro ${{ matrix.ros_distro }}
+          rosdep install \
+            --from-paths ros2_lingua ros2_lingua_interfaces ros2_lingua_mock \
+            --ignore-src \
+            --rosdistro ${{ matrix.ros_distro }} \
+            -y
+
       # Build all ROS 2 packages in the workspace.
       - name: Build workspace
         shell: bash

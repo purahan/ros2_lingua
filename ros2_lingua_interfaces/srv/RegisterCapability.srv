@@ -1,0 +1,4 @@
+string capability_json
+---
+bool success
+string message

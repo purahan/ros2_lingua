@@ -1,0 +1,5 @@
+string instruction
+---
+bool success
+string plan_json
+string message

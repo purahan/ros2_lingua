@@ -1,0 +1,6 @@
+string capability_name
+string parameters_json
+---
+bool success
+string[] state_set
+string[] state_clear

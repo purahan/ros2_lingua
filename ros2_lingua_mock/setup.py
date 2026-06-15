@@ -15,6 +15,7 @@ setup(
         (os.path.join("lib", package_name, "dashboard"), glob("ros2_lingua_mock/dashboard/*")),
     ],
     install_requires=["setuptools"],
+    tests_require=['pytest'],
     zip_safe=True,
     entry_points={
         "console_scripts": [

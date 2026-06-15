@@ -93,10 +93,13 @@ class GroundingNode(Node):
         elif backend_name == "ollama":
             host = self.get_parameter("ollama_host").value
             backend = OllamaBackend(model=model, host=host)
+        elif backend_name == "mock":
+            from ros2_lingua_core.backends import MockBackend
+            backend = MockBackend()
         else:
             raise ValueError(
                 f"Unknown llm_backend '{backend_name}'. "
-                "Choose from: openai, anthropic, ollama"
+                "Choose from: openai, anthropic, ollama, mock"
             )
 
         return GroundingEngine(

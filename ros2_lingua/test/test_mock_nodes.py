@@ -44,8 +44,8 @@ def generate_test_description():
         executable="grounding_node",
         name="lingua_grounding_node",
         parameters=[{
-            "llm_backend": "ollama",
-            "llm_model": "llama3.1",
+            "llm_backend": "mock",
+            "llm_model": "mock",
             "auto_chain": True,
         }],
         output="screen",
@@ -154,7 +154,8 @@ class TestMockNodes(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        rclpy.init()
+        if not rclpy.ok():
+            rclpy.init()
         cls.node = CapabilitySubscriberNode()
         # Wait for all mock nodes to register (7 capabilities total)
         assert cls.node.wait_for_capabilities(min_count=7, timeout=25.0), \

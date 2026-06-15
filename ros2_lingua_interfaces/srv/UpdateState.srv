@@ -1,0 +1,4 @@
+string state_json
+---
+bool success
+string message

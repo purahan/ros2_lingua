@@ -324,7 +324,7 @@ class MockBackend:
         backend = MockBackend.failing(LLMTimeoutError("timed out"), retries_before_success=2)
     """
 
-    def __init__(self, fixed_response: str):
+    def __init__(self, fixed_response: str = ""):
         self._response = fixed_response
         self._fail_with: Exception | None = None
         self._retries_before_success = 0
@@ -352,4 +352,26 @@ class MockBackend:
         self._call_count += 1
         if self._fail_with and self._call_count <= self._retries_before_success:
             raise self._fail_with
-        return self._response
+
+        if self._response:
+            return self._response
+
+        import json
+        last_msg = messages[-1]["content"].lower() if messages else ""
+        if "impossible" in last_msg or "cannot do this" in last_msg or "infeasible" in last_msg:
+            return json.dumps({
+                "feasible": False,
+                "steps": [],
+                "reason": "I cannot do this."
+            })
+        
+        return json.dumps({
+            "feasible": True,
+            "steps": [
+                {
+                    "capability_name": "say",
+                    "parameters": {}
+                }
+            ],
+            "reason": "OK"
+        })

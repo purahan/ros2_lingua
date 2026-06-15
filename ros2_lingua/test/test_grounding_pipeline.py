@@ -114,8 +114,8 @@ def generate_test_description():
         executable="grounding_node",
         name="lingua_grounding_node",
         parameters=[{
-            "llm_backend": "ollama",
-            "llm_model": "llama3.1",
+            "llm_backend": "mock",
+            "llm_model": "mock",
             "llm_api_key": "",
             "auto_chain": True,
         }],
@@ -190,7 +190,8 @@ class TestGroundingPipeline(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        rclpy.init()
+        if not rclpy.ok():
+            rclpy.init()
         cls.node = TestHelperNode()
         cls.executor = rclpy.executors.SingleThreadedExecutor()
         cls.executor.add_node(cls.node)

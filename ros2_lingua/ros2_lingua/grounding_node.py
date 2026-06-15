@@ -13,6 +13,7 @@ the dispatcher node can pick it up and execute it.
 """
 
 import json
+import os
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
@@ -44,9 +45,8 @@ class GroundingNode(Node):
         super().__init__("lingua_grounding_node")
 
         # --- Parameters ---
-        self.declare_parameter("llm_backend", "openai")     # openai | anthropic | ollama
+        self.declare_parameter("llm_backend", "openai")     # openai | anthropic | ollama | mock
         self.declare_parameter("llm_model", "gpt-4o")
-        self.declare_parameter("llm_api_key", "")
         self.declare_parameter("ollama_host", "http://localhost:11434")
         self.declare_parameter("auto_chain", True)
 
@@ -83,8 +83,16 @@ class GroundingNode(Node):
     def _build_engine(self) -> GroundingEngine:
         backend_name = self.get_parameter("llm_backend").value
         model = self.get_parameter("llm_model").value
-        api_key = self.get_parameter("llm_api_key").value
         auto_chain = self.get_parameter("auto_chain").value
+
+        # Read API key from environment — never expose via ROS 2 param server
+        api_key = os.environ.get("LINGUA_LLM_API_KEY", "")
+        if not api_key and backend_name in ("openai", "anthropic"):
+            self.get_logger().warn(
+                "LINGUA_LLM_API_KEY not set. "
+                f"Backend '{backend_name}' requires an API key. "
+                "Export it before launching: export LINGUA_LLM_API_KEY=sk-..."
+            )
 
         if backend_name == "openai":
             backend = OpenAIBackend(api_key=api_key, model=model)

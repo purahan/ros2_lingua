@@ -116,7 +116,6 @@ def generate_test_description():
         parameters=[{
             "llm_backend": "mock",
             "llm_model": "mock",
-            "llm_api_key": "",
             "auto_chain": True,
         }],
         output="screen",

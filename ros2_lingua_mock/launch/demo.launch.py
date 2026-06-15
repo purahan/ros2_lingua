@@ -8,14 +8,17 @@ Starts the complete ros2_lingua demo system with one command:
 Optional arguments:
     llm_backend  : openai | anthropic | ollama (default: ollama)
     llm_model    : model name (default: llama3.1)
-    llm_api_key  : API key if using openai or anthropic (default: "")
+
+For OpenAI or Anthropic backends, export your API key first:
+    export LINGUA_LLM_API_KEY=sk-...
 
 Examples:
     # Local Ollama (no API key)
     ros2 launch ros2_lingua_mock demo.launch.py
 
     # OpenAI
-    ros2 launch ros2_lingua_mock demo.launch.py llm_backend:=openai llm_api_key:=sk-...
+    export LINGUA_LLM_API_KEY=sk-...
+    ros2 launch ros2_lingua_mock demo.launch.py llm_backend:=openai
 
     # Smaller local model
     ros2 launch ros2_lingua_mock demo.launch.py llm_model:=llama3.2
@@ -40,15 +43,9 @@ def generate_launch_description():
         default_value="llama3.1",
         description="LLM model name",
     )
-    llm_api_key_arg = DeclareLaunchArgument(
-        "llm_api_key",
-        default_value="",
-        description="API key (required for openai and anthropic backends)",
-    )
 
     llm_backend = LaunchConfiguration("llm_backend")
     llm_model = LaunchConfiguration("llm_model")
-    llm_api_key = LaunchConfiguration("llm_api_key")
 
     # --- Core nodes ---
 
@@ -59,7 +56,6 @@ def generate_launch_description():
         parameters=[{
             "llm_backend": llm_backend,
             "llm_model": llm_model,
-            "llm_api_key": llm_api_key,
             "auto_chain": True,
         }],
         output="screen",
@@ -140,7 +136,7 @@ def generate_launch_description():
     return LaunchDescription([
         llm_backend_arg,
         llm_model_arg,
-        llm_api_key_arg,
+        LogInfo(msg="NOTE: For OpenAI/Anthropic, export LINGUA_LLM_API_KEY before launching."),
         LogInfo(msg="Starting ros2_lingua demo system..."),
         grounding_node,
         dispatcher_node,

@@ -123,7 +123,7 @@ mkdir -p ~/ros2_lingua_ws/src
 cd ~/ros2_lingua_ws/src
 
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/ros2_lingua.git
+git clone https://github.com/purahan/ros2_lingua.git
 
 # Copy packages into the workspace
 cp -r ros2_lingua/ros2_lingua_core .

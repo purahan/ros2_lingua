@@ -19,7 +19,7 @@
   <depend>ros2_lingua_core</depend>
   <depend>ros2_lingua_interfaces</depend>
 
-  <test_depend>pytest</test_depend>
+  <test_depend>python3-pytest</test_depend>
 
   <export>
     <build_type>ament_python</build_type>

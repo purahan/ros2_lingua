@@ -303,15 +303,33 @@ ros2_lingua/
 
 ## Roadmap
 
-- [ ] Launch files — start the full system with one command
-- [ ] Mock robot nodes — simulate a real robot for testing and demos
-- [ ] CLI tool — `ros2 lingua ground "your instruction"`
-- [ ] Capability tagging — filter capabilities by category (locomotion, manipulation, etc.)
-- [ ] Web dashboard — live visualization of capabilities, state, and execution plans
+- [x] Launch files — start the full system with one command
+- [x] Mock robot nodes — simulate a real robot for testing and demos
+- [x] CLI tool — `ros2 lingua ground "your instruction"`
+- [x] Capability tagging — filter capabilities by category (locomotion, manipulation, etc.)
+- [x] Web dashboard — live visualization of capabilities, state, and execution plans
 - [ ] C++ bindings — capability advertisement from C++ controller nodes
 - [ ] Voice input — Whisper integration for spoken instructions
 - [ ] Integration tests — full ROS 2 pipeline testing with `launch_testing`
 
+---
+
+## Citation
+
+If you use ros2_lingua in your research or build on it, please cite:
+
+```bibtex
+@software{purahan2026ros2lingua,
+  author       = {Gupta, Purahan},
+  title        = {ros2\_lingua: A Structured LLM Grounding Engine 
+                  for ROS 2 Robots},
+  year         = {2026},
+  publisher    = {GitHub},
+  journal      = {GitHub repository},
+  url          = {https://github.com/purahan/ros2_lingua},
+  note         = {Apache-2.0 License}
+}
+```
 ---
 
 ## Contributing

@@ -364,7 +364,7 @@ class MockBackend:
                 "steps": [],
                 "reason": "I cannot do this."
             })
-        
+
         return json.dumps({
             "feasible": True,
             "steps": [

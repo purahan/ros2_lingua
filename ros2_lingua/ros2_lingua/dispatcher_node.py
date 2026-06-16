@@ -27,7 +27,9 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from std_msgs.msg import String
+from std_srvs.srv import Empty
 from typing import Optional
+import threading
 
 from ros2_lingua_interfaces.srv import UpdateState
 from ros2_lingua_interfaces.msg import ExecutionStatus
@@ -86,6 +88,16 @@ class DispatcherNode(Node):
             callback_group=self._callback_group,
         )
 
+        # Plan cancellation handling
+        self._cancel_requested = False
+        self._plan_running_event = threading.Event()
+        self._plan_running_event.set()  # Initial state: not running (so set to True, wait() won't block)
+        self._cancel_srv = self.create_service(
+            Empty,
+            "/lingua/cancel",
+            self._handle_cancel,
+        )
+
         # Cached action clients keyed by action name
         self._action_clients = {}
 
@@ -142,6 +154,15 @@ class DispatcherNode(Node):
         tag_filter  = plan_data.get("tag_filter", None)
         total       = len(steps)
 
+        # If a plan is currently running, cancel it and wait for it to finish
+        if not self._plan_running_event.is_set():
+            self.get_logger().info("New plan received. Cancelling current running plan...")
+            self._cancel_requested = True
+            self._plan_running_event.wait()
+
+        self._cancel_requested = False
+        self._plan_running_event.clear()  # Mark as running
+
         self.get_logger().info(
             f"Executing plan: '{instruction}' ({total} steps)"
         )
@@ -155,13 +176,19 @@ class DispatcherNode(Node):
         current_state = set()
 
         i = 0
-        while i < len(steps):
-            step     = steps[i]
-            cap_name = step.get("capability_name", "")
-            params   = step.get("parameters", {})
+        try:
+            while i < len(steps):
+                if self._cancel_requested:
+                    self.get_logger().warn(f"Plan cancelled during step {i+1}/{len(steps)}")
+                    self._publish_status("CANCELLED", instruction=instruction)
+                    return
 
-            self.get_logger().info(f"Step {i+1}/{len(steps)}: {cap_name}")
-            self._publish_status("STEP_STARTED", step=cap_name, instruction=instruction)
+                step     = steps[i]
+                cap_name = step.get("capability_name", "")
+                params   = step.get("parameters", {})
+
+                self.get_logger().info(f"Step {i+1}/{len(steps)}: {cap_name}")
+                self._publish_status("STEP_STARTED", step=cap_name, instruction=instruction)
 
             success, state_set, state_clear = self._execute_step(cap_name, params)
 
@@ -241,6 +268,14 @@ class DispatcherNode(Node):
 
         self._publish_status("COMPLETED", instruction=instruction)
         self.get_logger().info("Plan executed successfully.")
+        finally:
+            self._plan_running_event.set()  # Mark as no longer running
+
+    def _handle_cancel(self, request, response):
+        """Service callback to cancel the currently running plan."""
+        self.get_logger().warn("Cancellation requested via /lingua/cancel service.")
+        self._cancel_requested = True
+        return response
 
     def _execute_step(
         self, capability_name: str, parameters: dict

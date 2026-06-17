@@ -49,6 +49,7 @@ class GroundingNode(Node):
         self.declare_parameter("llm_model", "gpt-4o")
         self.declare_parameter("ollama_host", "http://localhost:11434")
         self.declare_parameter("auto_chain", True)
+        self.declare_parameter("cache_ttl_sec", 0.0)
 
         # --- Core objects ---
         self._registry = CapabilityRegistry()
@@ -95,6 +96,7 @@ class GroundingNode(Node):
         backend_name = self.get_parameter("llm_backend").value
         model = self.get_parameter("llm_model").value
         auto_chain = self.get_parameter("auto_chain").value
+        cache_ttl_sec = self.get_parameter("cache_ttl_sec").value
 
         # Read API key from environment — never expose via ROS 2 param server
         api_key = os.environ.get("LINGUA_LLM_API_KEY", "")
@@ -125,6 +127,7 @@ class GroundingNode(Node):
             registry=self._registry,
             backend=backend,
             auto_chain=auto_chain,
+            cache_ttl_sec=cache_ttl_sec,
         )
 
     def _handle_register(self, request, response):

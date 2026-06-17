@@ -198,7 +198,7 @@ class GroundingEngine:
         self._validator = ParameterValidator() if validate_params else None
 
         # Cache: (instruction_hash, registry_hash) -> (ActionPlan, timestamp)
-        self._plan_cache = {}
+        self._plan_cache: dict[tuple[str, str], tuple[ActionPlan, float]] = {}
 
     def ground(self, instruction: str, tag_filter: list[str] | None = None) -> ActionPlan:
         """

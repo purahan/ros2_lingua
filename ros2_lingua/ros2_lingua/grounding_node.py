@@ -16,8 +16,8 @@ import json
 import os
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
-from std_srvs.srv import Empty
+from std_msgs.msg import String, Empty
+from std_srvs.srv import Empty as EmptySrv
 
 from ros2_lingua_core import (
     Capability,
@@ -78,7 +78,18 @@ class GroundingNode(Node):
         # Publish capabilities periodically so new nodes can inspect them
         self._caps_timer = self.create_timer(5.0, self._publish_capabilities)
 
+        # Re-registration trigger on startup
+        self._reregister_pub = self.create_publisher(Empty, "/lingua/request_reregister", 10)
+        # Give nodes 2 seconds to initialize their subscribers before requesting
+        self._startup_reregister_timer = self.create_timer(2.0, self._trigger_reregistration)
+
         self.get_logger().info("GroundingNode ready.")
+
+    def _trigger_reregistration(self):
+        """Trigger re-registration of capabilities and cancel the timer."""
+        self.get_logger().info("Triggering capability re-registration for existing nodes.")
+        self._reregister_pub.publish(Empty())
+        self._startup_reregister_timer.cancel()
 
     def _build_engine(self) -> GroundingEngine:
         backend_name = self.get_parameter("llm_backend").value

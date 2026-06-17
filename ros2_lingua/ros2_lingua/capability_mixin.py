@@ -12,6 +12,7 @@ import json
 import time
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import Empty
 
 from ros2_lingua_interfaces.srv import RegisterCapability, UpdateState
 from ros2_lingua_core import Capability
@@ -37,6 +38,30 @@ class LinguaMixin:
         self._lingua_state_client = self.create_client(
             UpdateState, "/lingua/update_state"
         )
+        self._registered_capabilities = []
+        
+        self._reregister_sub = self.create_subscription(
+            Empty,
+            "/lingua/request_reregister",
+            self._handle_reregister_request,
+            10
+        )
+
+    def _handle_reregister_request(self, msg: Empty):
+        """Callback when GroundingNode restarts and requests re-registration."""
+        if not self._registered_capabilities:
+            return
+            
+        self.get_logger().info("[Lingua] Grounding node requested re-registration. Re-registering capabilities...")
+        for cap in self._registered_capabilities:
+            # Run in a separate thread or timer to avoid blocking the subscription callback
+            # but since we already have retry logic with timeouts, it's safer to avoid blocking.
+            # Using a one-shot timer allows returning immediately.
+            self.create_timer(
+                0.1, 
+                lambda c=cap: self._execute_registration(c, 10.0, 3), 
+                callback_group=rclpy.callback_groups.MutuallyExclusiveCallbackGroup()
+            )
 
     def register_lingua_capability(
         self,
@@ -59,6 +84,13 @@ class LinguaMixin:
         Returns:
             True on success, False on failure.
         """
+        if capability not in self._registered_capabilities:
+            self._registered_capabilities.append(capability)
+            
+        return self._execute_registration(capability, wait_timeout, max_retries)
+
+    def _execute_registration(self, capability: Capability, wait_timeout: float, max_retries: int) -> bool:
+        """Internal helper to execute the registration with retries."""
         logger = self.get_logger()
         delay = 1.0
 

@@ -183,7 +183,7 @@ class GroundingEngine:
                              Catches type errors (e.g. speed="fast") before dispatch.
             strict_params:   If True, reject unknown parameters in LLM responses.
                              If False (default), pass unknown params through unchanged.
-            cache_ttl_sec:   How long to cache identical plans in seconds. 
+            cache_ttl_sec:   How long to cache identical plans in seconds.
                              Default 0.0 (disabled).
         """
         self._registry = registry
@@ -196,7 +196,7 @@ class GroundingEngine:
         self._strict_params = strict_params
         self._cache_ttl_sec = cache_ttl_sec
         self._validator = ParameterValidator() if validate_params else None
-        
+
         # Cache: (instruction_hash, registry_hash) -> (ActionPlan, timestamp)
         self._plan_cache = {}
 
@@ -234,11 +234,11 @@ class GroundingEngine:
             # Include both capability names and current state in the registry hash
             registry_state = {
                 "caps": sorted(self._registry.names()),
-                "state": sorted(list(self._registry.get_state()))
+                "state": sorted(self._registry.get_state()),
             }
             registry_hash = hashlib.md5(json.dumps(registry_state).encode()).hexdigest()
             cache_key = (instruction_hash, registry_hash)
-            
+
             if cache_key in self._plan_cache:
                 cached_plan, timestamp = self._plan_cache[cache_key]
                 if time.time() - timestamp <= self._cache_ttl_sec:

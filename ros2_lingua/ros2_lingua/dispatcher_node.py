@@ -21,18 +21,19 @@ After each step completes, the dispatcher automatically updates
 /lingua/update_state with the state_set/state_clear from the result.
 """
 
+import contextlib
 import json
-import rclpy
-from rclpy.action import ActionClient
-from rclpy.node import Node
-from rclpy.callback_groups import ReentrantCallbackGroup
-from std_msgs.msg import String
-from std_srvs.srv import Empty
-from typing import Optional
 import threading
 
-from ros2_lingua_interfaces.srv import UpdateState
+import rclpy
+from rclpy.action import ActionClient
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.node import Node
+from std_msgs.msg import String
+from std_srvs.srv import Empty
+
 from ros2_lingua_interfaces.msg import ExecutionStatus
+from ros2_lingua_interfaces.srv import UpdateState
 
 
 class DispatcherNode(Node):
@@ -190,84 +191,84 @@ class DispatcherNode(Node):
                 self.get_logger().info(f"Step {i+1}/{len(steps)}: {cap_name}")
                 self._publish_status("STEP_STARTED", step=cap_name, instruction=instruction)
 
-            success, state_set, state_clear = self._execute_step(cap_name, params)
+                success, state_set, state_clear = self._execute_step(cap_name, params)
 
-            if state_set or state_clear:
-                self._update_state(state_set, state_clear)
-                current_state.update(state_set)
-                current_state -= set(state_clear)
+                if state_set or state_clear:
+                    self._update_state(state_set, state_clear)
+                    current_state.update(state_set)
+                    current_state -= set(state_clear)
 
-            if success:
-                self._publish_status("STEP_COMPLETE", step=cap_name, instruction=instruction)
-                i += 1
-                continue
+                if success:
+                    self._publish_status("STEP_COMPLETE", step=cap_name, instruction=instruction)
+                    i += 1
+                    continue
 
-            # ── Step failed — attempt recovery if planner available ──
-            if self._recovery_planner is None:
-                self.get_logger().error(
-                    f"Step '{cap_name}' failed. Aborting plan (no recovery planner)."
-                )
-                self._publish_status("FAILED", step=cap_name, instruction=instruction)
-                return
-
-            decision = self._recovery_planner.on_step_failed(
-                failed_step=step,
-                step_index=i,
-                original_instruction=instruction,
-                current_state=current_state,
-                error=f"Step '{cap_name}' returned failure",
-                tag_filter=tag_filter,
-            )
-
-            if decision.strategy == "retry":
-                self.get_logger().info(f"Recovery: retrying '{cap_name}'")
-                self._publish_status("STEP_RETRY", step=cap_name, instruction=instruction)
-                # Loop will re-execute the same step (i not incremented)
-                continue
-
-            elif decision.strategy == "replan":
-                self.get_logger().info(
-                    f"Recovery: replanned — {len(decision.new_plan.steps)} new step(s)"
-                )
-                self._publish_status("REPLANNING", step=cap_name, instruction=instruction)
-                # Replace remaining steps with the new plan
-                steps = [s.to_dict() if hasattr(s, 'to_dict') else s
-                         for s in decision.new_plan.steps]
-                i = 0  # restart from the beginning of the new plan
-                continue
-
-            elif decision.strategy == "fallback":
-                fallback_name = self._recovery_planner.config.safe_fallback
-                fallback_params = self._recovery_planner.config.safe_fallback_params
-                self.get_logger().warn(
-                    f"Recovery: executing fallback '{fallback_name}'"
-                )
-                self._publish_status("FALLBACK", step=fallback_name, instruction=instruction)
-                fb_success, fb_set, fb_clear = self._execute_step(
-                    fallback_name, fallback_params
-                )
-                if fb_set or fb_clear:
-                    self._update_state(fb_set, fb_clear)
-                if not fb_success:
+                # ── Step failed — attempt recovery if planner available ──
+                if self._recovery_planner is None:
                     self.get_logger().error(
-                        f"Fallback '{fallback_name}' also failed."
+                        f"Step '{cap_name}' failed. Aborting plan (no recovery planner)."
                     )
-                self._publish_status(
-                    "RECOVERY_FAILED", step=cap_name, instruction=instruction
-                )
-                return
+                    self._publish_status("FAILED", step=cap_name, instruction=instruction)
+                    return
 
-            else:  # abort
-                self.get_logger().error(
-                    f"Recovery: aborting. Reason: {decision.reason}"
+                decision = self._recovery_planner.on_step_failed(
+                    failed_step=step,
+                    step_index=i,
+                    original_instruction=instruction,
+                    current_state=current_state,
+                    error=f"Step '{cap_name}' returned failure",
+                    tag_filter=tag_filter,
                 )
-                self._publish_status(
-                    "RECOVERY_FAILED", step=cap_name, instruction=instruction
-                )
-                return
 
-        self._publish_status("COMPLETED", instruction=instruction)
-        self.get_logger().info("Plan executed successfully.")
+                if decision.strategy == "retry":
+                    self.get_logger().info(f"Recovery: retrying '{cap_name}'")
+                    self._publish_status("STEP_RETRY", step=cap_name, instruction=instruction)
+                    # Loop will re-execute the same step (i not incremented)
+                    continue
+
+                elif decision.strategy == "replan":
+                    self.get_logger().info(
+                        f"Recovery: replanned — {len(decision.new_plan.steps)} new step(s)"
+                    )
+                    self._publish_status("REPLANNING", step=cap_name, instruction=instruction)
+                    # Replace remaining steps with the new plan
+                    steps = [s.to_dict() if hasattr(s, 'to_dict') else s
+                             for s in decision.new_plan.steps]
+                    i = 0  # restart from the beginning of the new plan
+                    continue
+
+                elif decision.strategy == "fallback":
+                    fallback_name = self._recovery_planner.config.safe_fallback
+                    fallback_params = self._recovery_planner.config.safe_fallback_params
+                    self.get_logger().warn(
+                        f"Recovery: executing fallback '{fallback_name}'"
+                    )
+                    self._publish_status("FALLBACK", step=fallback_name, instruction=instruction)
+                    fb_success, fb_set, fb_clear = self._execute_step(
+                        fallback_name, fallback_params
+                    )
+                    if fb_set or fb_clear:
+                        self._update_state(fb_set, fb_clear)
+                    if not fb_success:
+                        self.get_logger().error(
+                            f"Fallback '{fallback_name}' also failed."
+                        )
+                    self._publish_status(
+                        "RECOVERY_FAILED", step=cap_name, instruction=instruction
+                    )
+                    return
+
+                else:  # abort
+                    self.get_logger().error(
+                        f"Recovery: aborting. Reason: {decision.reason}"
+                    )
+                    self._publish_status(
+                        "RECOVERY_FAILED", step=cap_name, instruction=instruction
+                    )
+                    return
+
+            self._publish_status("COMPLETED", instruction=instruction)
+            self.get_logger().info("Plan executed successfully.")
         finally:
             self._plan_running_event.set()  # Mark as no longer running
 
@@ -616,10 +617,10 @@ class DispatcherNode(Node):
             f"  → [DEMO] action '{action_name}' | {cap_name} | {params}"
         )
         self.get_logger().warn(
-            f"  Running in demo mode. For real execution either:\n"
-            f"  1. Implement LinguaActionServer on your node\n"
-            f"  2. Use DispatchConfig to map to your existing interfaces\n"
-            f"  3. Subclass DispatcherNode and override _call_action_typed()"
+            "  Running in demo mode. For real execution either:\n"
+            "  1. Implement LinguaActionServer on your node\n"
+            "  2. Use DispatchConfig to map to your existing interfaces\n"
+            "  3. Subclass DispatcherNode and override _call_action_typed()"
         )
         return True
 
@@ -665,10 +666,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        try:
+        with contextlib.suppress(Exception):
             rclpy.shutdown()
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":

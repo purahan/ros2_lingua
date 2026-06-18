@@ -1,3 +1,5 @@
+import os
+from glob import glob
 from setuptools import setup
 
 package_name = 'ros2_lingua'
@@ -9,7 +11,8 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/ros2_lingua']),
-        ('share/ros2_lingua', ['package.xml']),
+        ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
     ],
     install_requires=['setuptools'],
     tests_require=['pytest'],

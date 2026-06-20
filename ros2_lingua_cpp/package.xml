@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>ros2_lingua_cpp</name>
+  <version>0.1.0</version>
+  <description>
+    C++ header-only library for integrating ROS 2 C++ nodes with ros2_lingua.
+    Provides lingua::LinguaMixin and lingua::Capability — the C++ equivalents
+    of Python's LinguaMixin and Capability classes.
+  </description>
+  <maintainer email="gpurahan@gmail.com">purahan</maintainer>
+  <license>Apache-2.0</license>
+
+  <url type="website">https://purahan.github.io/ros2_lingua/</url>
+  <url type="repository">https://github.com/purahan/ros2_lingua</url>
+  <url type="bugtracker">https://github.com/purahan/ros2_lingua/issues</url>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>ros2_lingua_interfaces</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

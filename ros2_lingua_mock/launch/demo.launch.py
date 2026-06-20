@@ -33,6 +33,11 @@ from launch_ros.actions import Node
 def generate_launch_description():
 
     # --- Launch arguments ---
+    robot_namespace_arg = DeclareLaunchArgument(
+        "robot_namespace",
+        default_value="",
+        description="Namespace to apply to all nodes",
+    )
     llm_backend_arg = DeclareLaunchArgument(
         "llm_backend",
         default_value="ollama",
@@ -46,6 +51,7 @@ def generate_launch_description():
 
     llm_backend = LaunchConfiguration("llm_backend")
     llm_model = LaunchConfiguration("llm_model")
+    robot_namespace = LaunchConfiguration("robot_namespace")
 
     # --- Core nodes ---
 
@@ -53,6 +59,7 @@ def generate_launch_description():
         package="ros2_lingua",
         executable="grounding_node",
         name="lingua_grounding_node",
+        namespace=robot_namespace,
         parameters=[{
             "llm_backend": llm_backend,
             "llm_model": llm_model,
@@ -65,6 +72,7 @@ def generate_launch_description():
         package="ros2_lingua",
         executable="dispatcher_node",
         name="lingua_dispatcher_node",
+        namespace=robot_namespace,
         output="screen",
     )
 
@@ -77,6 +85,7 @@ def generate_launch_description():
             package="ros2_lingua_mock",
             executable="balance_node",
             name="mock_balance_node",
+            namespace=robot_namespace,
             output="screen",
         )],
     )
@@ -87,6 +96,7 @@ def generate_launch_description():
             package="ros2_lingua_mock",
             executable="navigation_node",
             name="mock_navigation_node",
+            namespace=robot_namespace,
             output="screen",
         )],
     )
@@ -97,6 +107,7 @@ def generate_launch_description():
             package="ros2_lingua_mock",
             executable="manipulation_node",
             name="mock_manipulation_node",
+            namespace=robot_namespace,
             output="screen",
         )],
     )
@@ -107,6 +118,7 @@ def generate_launch_description():
             package="ros2_lingua_mock",
             executable="speech_node",
             name="mock_speech_node",
+            namespace=robot_namespace,
             output="screen",
         )],
     )
@@ -118,6 +130,7 @@ def generate_launch_description():
             package="ros2_lingua_mock",
             executable="robot_monitor",
             name="robot_monitor",
+            namespace=robot_namespace,
             output="screen",
         )],
     )
@@ -129,11 +142,13 @@ def generate_launch_description():
             package="ros2_lingua_mock",
             executable="dashboard_server",
             name="dashboard_server_node",
+            namespace=robot_namespace,
             output="screen",
         )],
     )
 
     return LaunchDescription([
+        robot_namespace_arg,
         llm_backend_arg,
         llm_model_arg,
         LogInfo(msg="NOTE: For OpenAI/Anthropic, export LINGUA_LLM_API_KEY before launching."),

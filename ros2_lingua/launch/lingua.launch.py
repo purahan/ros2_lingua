@@ -6,6 +6,12 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     # Launch Arguments
+    robot_namespace_arg = DeclareLaunchArgument(
+        "robot_namespace",
+        default_value="",
+        description="Namespace to apply to all lingua nodes (e.g. 'robot_1')",
+    )
+
     llm_backend_arg = DeclareLaunchArgument(
         "llm_backend",
         default_value="openai",
@@ -41,6 +47,7 @@ def generate_launch_description():
         package="ros2_lingua",
         executable="grounding_node",
         name="lingua_grounding_node",
+        namespace=LaunchConfiguration("robot_namespace"),
         output="screen",
         parameters=[
             {
@@ -57,10 +64,12 @@ def generate_launch_description():
         package="ros2_lingua",
         executable="dispatcher_node",
         name="lingua_dispatcher_node",
+        namespace=LaunchConfiguration("robot_namespace"),
         output="screen",
     )
 
     return LaunchDescription([
+        robot_namespace_arg,
         llm_backend_arg,
         llm_model_arg,
         ollama_host_arg,

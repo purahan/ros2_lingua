@@ -61,7 +61,7 @@ class DispatcherNode(Node):
         # Subscribe to plans from the GroundingNode
         self._plan_sub = self.create_subscription(
             String,
-            "/lingua/current_plan",
+            "lingua/current_plan",
             self._handle_plan,
             10,
             callback_group=self._callback_group,
@@ -70,7 +70,7 @@ class DispatcherNode(Node):
         # Subscribe to capability registry for ros_action/ros_service lookup
         self._caps_sub = self.create_subscription(
             String,
-            "/lingua/capabilities",
+            "lingua/capabilities",
             self._handle_capabilities,
             10,
         )
@@ -78,14 +78,14 @@ class DispatcherNode(Node):
         # Publish execution status
         self._status_pub = self.create_publisher(
             ExecutionStatus,
-            "/lingua/execution_status",
+            "lingua/execution_status",
             10,
         )
 
         # State update client — used after each step completes
         self._state_client = self.create_client(
             UpdateState,
-            "/lingua/update_state",
+            "lingua/update_state",
             callback_group=self._callback_group,
         )
 
@@ -95,7 +95,7 @@ class DispatcherNode(Node):
         self._plan_running_event.set()  # Initial state: not running (so set to True, wait() won't block)
         self._cancel_srv = self.create_service(
             Empty,
-            "/lingua/cancel",
+            "lingua/cancel",
             self._handle_cancel,
         )
 
@@ -274,7 +274,7 @@ class DispatcherNode(Node):
 
     def _handle_cancel(self, request, response):
         """Service callback to cancel the currently running plan."""
-        self.get_logger().warn("Cancellation requested via /lingua/cancel service.")
+        self.get_logger().warn("Cancellation requested via lingua/cancel service.")
         self._cancel_requested = True
         return response
 

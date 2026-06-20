@@ -58,29 +58,29 @@ class GroundingNode(Node):
         # --- Services ---
         self._register_srv = self.create_service(
             RegisterCapability,
-            "/lingua/register_capability",
+            "lingua/register_capability",
             self._handle_register,
         )
         self._ground_srv = self.create_service(
             GroundInstruction,
-            "/lingua/ground",
+            "lingua/ground",
             self._handle_ground,
         )
         self._state_srv = self.create_service(
             UpdateState,
-            "/lingua/update_state",
+            "lingua/update_state",
             self._handle_update_state,
         )
 
         # --- Publishers ---
-        self._plan_pub = self.create_publisher(String, "/lingua/current_plan", 10)
-        self._caps_pub = self.create_publisher(String, "/lingua/capabilities", 10)
+        self._plan_pub = self.create_publisher(String, "lingua/current_plan", 10)
+        self._caps_pub = self.create_publisher(String, "lingua/capabilities", 10)
 
         # Publish capabilities periodically so new nodes can inspect them
         self._caps_timer = self.create_timer(5.0, self._publish_capabilities)
 
         # Re-registration trigger on startup
-        self._reregister_pub = self.create_publisher(Empty, "/lingua/request_reregister", 10)
+        self._reregister_pub = self.create_publisher(Empty, "lingua/request_reregister", 10)
         # Give nodes 2 seconds to initialize their subscribers before requesting
         self._startup_reregister_timer = self.create_timer(2.0, self._trigger_reregistration)
 

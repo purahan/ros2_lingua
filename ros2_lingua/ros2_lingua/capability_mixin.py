@@ -33,16 +33,16 @@ class LinguaMixin:
 
     def __init__(self):
         self._lingua_register_client = self.create_client(
-            RegisterCapability, "/lingua/register_capability"
+            RegisterCapability, "lingua/register_capability"
         )
         self._lingua_state_client = self.create_client(
-            UpdateState, "/lingua/update_state"
+            UpdateState, "lingua/update_state"
         )
         self._registered_capabilities = []
         
         self._reregister_sub = self.create_subscription(
             Empty,
-            "/lingua/request_reregister",
+            "lingua/request_reregister",
             self._handle_reregister_request,
             10
         )
@@ -100,7 +100,7 @@ class LinguaMixin:
             ):
                 if attempt < max_retries:
                     logger.warn(
-                        f"[Lingua] /lingua/register_capability not available "
+                        f"[Lingua] lingua/register_capability not available "
                         f"(attempt {attempt}/{max_retries}). "
                         f"Retrying in {delay:.0f}s..."
                     )
@@ -109,7 +109,7 @@ class LinguaMixin:
                     continue
                 else:
                     logger.error(
-                        f"[Lingua] Could not reach /lingua/register_capability "
+                        f"[Lingua] Could not reach lingua/register_capability "
                         f"after {max_retries} attempts. "
                         f"Is the GroundingNode running?"
                     )
@@ -180,7 +180,7 @@ class LinguaMixin:
             return True   # no-op
 
         if not self._lingua_state_client.wait_for_service(timeout_sec=2.0):
-            logger.warn("[Lingua] /lingua/update_state not available — state update skipped.")
+            logger.warn("[Lingua] lingua/update_state not available — state update skipped.")
             return False
 
         request = UpdateState.Request()

@@ -48,10 +48,16 @@ def generate_launch_description():
         default_value="llama3.1",
         description="LLM model name",
     )
+    dashboard_port_arg = DeclareLaunchArgument(
+        "dashboard_port",
+        default_value="8080",
+        description="HTTP port for the dashboard server",
+    )
 
     llm_backend = LaunchConfiguration("llm_backend")
     llm_model = LaunchConfiguration("llm_model")
     robot_namespace = LaunchConfiguration("robot_namespace")
+    dashboard_port = LaunchConfiguration("dashboard_port")
 
     # --- Core nodes ---
 
@@ -143,6 +149,7 @@ def generate_launch_description():
             executable="dashboard_server",
             name="dashboard_server_node",
             namespace=robot_namespace,
+            parameters=[{"port": dashboard_port}],
             output="screen",
         )],
     )
@@ -151,6 +158,7 @@ def generate_launch_description():
         robot_namespace_arg,
         llm_backend_arg,
         llm_model_arg,
+        dashboard_port_arg,
         LogInfo(msg="NOTE: For OpenAI/Anthropic, export LINGUA_LLM_API_KEY before launching."),
         LogInfo(msg="Starting ros2_lingua demo system..."),
         grounding_node,
@@ -161,5 +169,5 @@ def generate_launch_description():
         speech_node,
         monitor_node,
         dashboard_node,
-        LogInfo(msg="All nodes launched. Dashboard: http://localhost:8080"),
+        LogInfo(msg=["All nodes launched. Dashboard: http://localhost:", dashboard_port]),
     ])

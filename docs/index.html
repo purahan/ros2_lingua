@@ -733,7 +733,8 @@ NAVIGATE = Capability(
               <h3 class="font-h2 text-base text-on-surface">Add LinguaMixin to your node</h3>
             </div>
             <div class="p-5 overflow-x-auto">
-<pre><code class="text-on-surface-variant text-sm"><span class="text-primary-fixed-dim">from</span> rclpy.node <span class="text-primary-fixed-dim">import</span> Node
+<pre><code class="text-on-surface-variant text-sm"><span class="text-outline"># Python:</span>
+<span class="text-primary-fixed-dim">from</span> rclpy.node <span class="text-primary-fixed-dim">import</span> Node
 <span class="text-primary-fixed-dim">from</span> ros2_lingua <span class="text-primary-fixed-dim">import</span> LinguaMixin
 <span class="text-primary-fixed-dim">from</span> my_robot.capabilities <span class="text-primary-fixed-dim">import</span> NAVIGATE
 
@@ -742,7 +743,20 @@ NAVIGATE = Capability(
         Node.__init__(self, <span class="text-secondary">"my_navigation_node"</span>)
         LinguaMixin.__init__(self)
         <span class="text-outline"># ... your existing __init__ code ...</span>
-        self.register_lingua_capability(NAVIGATE)  <span class="text-outline"># ← this is all it takes</span></code></pre>
+        self.register_lingua_capability(NAVIGATE)  <span class="text-outline"># ← this is all it takes</span>
+
+<span class="text-outline"># C++:</span>
+<span class="text-primary-fixed-dim">#include</span> <span class="text-secondary">"ros2_lingua_cpp/lingua_mixin.hpp"</span>
+
+<span class="text-primary-fixed-dim">class</span> MyNavigationNode : <span class="text-primary-fixed-dim">public</span> lingua::LinguaMixin&lt;rclcpp::Node&gt; {
+<span class="text-primary-fixed-dim">public:</span>
+    MyNavigationNode() : LinguaMixin(<span class="text-secondary">"my_navigation_node"</span>) {
+        lingua::Capability cap;
+        cap.name = <span class="text-secondary">"navigate_to_location"</span>;
+        <span class="text-outline">// ... populate capability fields ...</span>
+        register_capability(cap);
+    }
+};</code></pre>
             </div>
           </div>
 
@@ -905,6 +919,33 @@ backend = OllamaBackend(model=<span class="text-secondary">"llama3.1"</span>, re
     print(<span class="text-secondary">f"Model not found: {e}. Try: ollama pull llama3.1"</span>)
 <span class="text-primary-fixed-dim">except</span> LLMBackendError <span class="text-primary-fixed-dim">as</span> e:
     print(<span class="text-secondary">f"LLM connectivity issue: {e}"</span>)</code></pre>
+          </div>
+        </div>
+
+        <h2 class="font-h2 text-xl text-on-surface mb-4 border-b border-outline-variant/20 pb-3 mt-8">Error Recovery</h2>
+        <p class="font-body-lg text-body-lg text-on-surface-variant mb-6">When a dispatcher step fails on the robot, the <code class="text-secondary bg-secondary/10 px-1.5 py-0.5 rounded text-sm">RecoveryPlanner</code> decides the next action based on a prioritized cascade: Retry, Replan, Fallback, Abort.</p>
+
+        <div class="glass-card rounded-xl overflow-hidden mb-6">
+          <div class="flex items-center justify-between px-5 py-3 border-b border-outline-variant/20 bg-surface-container-high/30">
+            <span class="font-label-caps text-xs text-outline">python</span>
+            <button onclick="copyCode(this)" class="text-outline hover:text-secondary transition-colors flex items-center gap-1 text-xs font-label-caps"><span class="material-symbols-outlined text-sm">content_copy</span> copy</button>
+          </div>
+          <div class="p-5 overflow-x-auto">
+<pre><code class="text-on-surface-variant text-sm"><span class="text-primary-fixed-dim">from</span> ros2_lingua_core.recovery <span class="text-primary-fixed-dim">import</span> RecoveryPlanner, RecoveryConfig
+
+config = RecoveryConfig(
+    max_retries=<span class="text-amber">2</span>,
+    enable_replan=<span class="text-primary-fixed-dim">True</span>,
+    safe_fallback=<span class="text-secondary">"return_to_home"</span>
+)
+planner = RecoveryPlanner(config, grounding_engine=engine, registry=registry)
+
+<span class="text-outline"># On step failure, get the next strategy</span>
+decision = planner.on_step_failed(...)
+<span class="text-primary-fixed-dim">if</span> decision.strategy == <span class="text-secondary">"retry"</span>:
+    <span class="text-outline"># Retry the exact same capability</span>
+<span class="text-primary-fixed-dim">elif</span> decision.strategy == <span class="text-secondary">"replan"</span>:
+    <span class="text-outline"># Execute decision.new_plan</span></code></pre>
           </div>
         </div>
 
@@ -1122,12 +1163,17 @@ print(plan.to_json())</code></pre>
 ├── <span class="text-primary-fixed-dim">registry.py</span>           CapabilityRegistry + backward chain planner
 ├── <span class="text-primary-fixed-dim">grounding.py</span>          GroundingEngine, ActionPlan, ActionStep
 ├── <span class="text-primary-fixed-dim">backends.py</span>           OpenAI, Anthropic, Ollama, Mock, RetryConfig
+├── <span class="text-primary-fixed-dim">validator.py</span>          Validation logic for LLM output
+├── <span class="text-primary-fixed-dim">recovery.py</span>           RecoveryPlanner (retry/replan/fallback on failure)
 └── <span class="text-primary-fixed-dim">errors.py</span>             LinguaError hierarchy (11 specific types)
 
-<span class="text-secondary">ros2_lingua</span>               <span class="text-outline">← ROS 2 interface layer</span>
+<span class="text-secondary">ros2_lingua</span>               <span class="text-outline">← ROS 2 Python interface layer</span>
 ├── <span class="text-primary-fixed-dim">grounding_node.py</span>     Service server wrapping GroundingEngine
 ├── <span class="text-primary-fixed-dim">dispatcher_node.py</span>    Executes ActionPlans — subclass for your robot
 └── <span class="text-primary-fixed-dim">capability_mixin.py</span>   LinguaMixin for self-registering nodes
+
+<span class="text-secondary">ros2_lingua_cpp</span>           <span class="text-outline">← ROS 2 C++ interface layer</span>
+└── <span class="text-primary-fixed-dim">lingua_mixin.hpp</span>      LinguaMixin for self-registering C++ nodes
 
 <span class="text-secondary">ros2_lingua_interfaces</span>    <span class="text-outline">← custom service/message definitions</span>
 ├── srv/RegisterCapability.srv

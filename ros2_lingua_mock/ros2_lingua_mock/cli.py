@@ -5,6 +5,7 @@ A clean CLI tool for sending natural language instructions to the robot.
 
 Usage:
     ros2 run ros2_lingua_mock cli "go to the table and pick up the bottle"
+    ros2 run ros2_lingua_mock cli --namespace robot_1 "go to the table and pick up the bottle"
 
 Or as a ros2 verb (if installed):
     ros2 lingua ground "go to the table and pick up the bottle"
@@ -13,7 +14,7 @@ Prints the resulting plan in a human-readable format and shows
 live execution status as the dispatcher works through the steps.
 """
 
-import sys
+import argparse
 import json
 import time
 import rclpy
@@ -32,14 +33,16 @@ BANNER = """
 
 class LinguaCLI(Node):
 
-    def __init__(self, instruction: str):
+    def __init__(self, instruction: str, namespace: str = ""):
         super().__init__("lingua_cli")
         self._instruction = instruction
+
+        prefix = f"/{namespace}" if namespace else ""
         self._done = False
 
-        self._client = self.create_client(GroundInstruction, "/lingua/ground")
+        self._client = self.create_client(GroundInstruction, f"{prefix}/lingua/ground")
         self._status_sub = self.create_subscription(
-            String, "/lingua/execution_status", self._handle_status, 10
+            String, f"{prefix}/lingua/execution_status", self._handle_status, 10
         )
 
     def run(self):
@@ -112,15 +115,26 @@ class LinguaCLI(Node):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: ros2 run ros2_lingua_mock cli \"your instruction here\"")
-        print("Example: ros2 run ros2_lingua_mock cli \"go to the table and pick up the bottle\"")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Send a natural language instruction to the ros2_lingua grounding engine."
+    )
+    parser.add_argument(
+        "--namespace",
+        default="",
+        metavar="NS",
+        help="Robot namespace to prefix service and topic names (e.g. robot_1)",
+    )
+    parser.add_argument(
+        "instruction",
+        nargs="+",
+        help="Natural language instruction to send to the robot",
+    )
+    args = parser.parse_args()
 
-    instruction = " ".join(sys.argv[1:])
+    instruction = " ".join(args.instruction)
 
     rclpy.init()
-    cli = LinguaCLI(instruction)
+    cli = LinguaCLI(instruction, namespace=args.namespace)
     try:
         cli.run()
     except KeyboardInterrupt:

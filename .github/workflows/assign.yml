@@ -12,5 +12,8 @@ jobs:
       issues: write
     runs-on: ubuntu-latest
     steps:
-      - name: Assign the user or unassign
-        uses: takanome-dev/assign-issue-action@v1.6.1
+      - name: Assign the user or unassign stale assignments
+        uses: takanome-dev/assign-issue-action@beta
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          maintainers: "purahan"

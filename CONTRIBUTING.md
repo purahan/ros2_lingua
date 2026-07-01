@@ -143,10 +143,19 @@ colcon test  --packages-select ros2_lingua_cpp
 
 ## Areas That Need Help
 
+New to the project? Check the 
+[good first issue label](https://github.com/purahan/ros2_lingua/labels/good%20first%20issue) 
+for self-contained tasks that don't require deep familiarity with the codebase.
+
+### Good First Issues
+See the [issues page](https://github.com/purahan/ros2_lingua/issues) for 
+the current list — typically small CLI/docs/mock-node additions.
+
+### Larger Contributions
 - **Voice input** — Whisper integration for spoken natural language instructions
 - **Capability versioning** — detect and handle schema drift when nodes are updated independently
 - **Parameter validation in the dispatcher** — reject plans with malformed or out-of-range parameter values before they are sent to the robot
-- **Error recovery planner** — replan automatically when a step fails mid-execution instead of aborting the whole plan
 - **Testing on real robots** — validated integrations with nav2, MoveIt 2, and other common ROS 2 stacks are very welcome; open an issue to coordinate
 
-If you're using `ros2_lingua` on a real robot, we'd especially love to hear about it — open an issue and tell us what you're building.
+If you're using `ros2_lingua` on a real robot, we'd especially love to hear 
+about it — open an issue and tell us what you're building.

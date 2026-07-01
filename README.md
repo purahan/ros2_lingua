@@ -7,7 +7,7 @@
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue)](./ros2_lingua_cpp)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green)](./LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/purahan/ros2_lingua/ci.yml?branch=main&label=CI)](https://github.com/purahan/ros2_lingua/actions)
-[![Tests](https://img.shields.io/badge/Tests-41%20unit%20%7C%2016%20integration-brightgreen)](./ros2_lingua_core/tests/)
+[![Tests](https://img.shields.io/badge/Tests-80%20unit%20%7C%2016%20integration-brightgreen)](./ros2_lingua_core/tests/)
 [![Release](https://img.shields.io/github/v/release/purahan/ros2_lingua)](https://github.com/purahan/ros2_lingua/releases)
 [![Issues](https://img.shields.io/github/issues/purahan/ros2_lingua)](https://github.com/purahan/ros2_lingua/issues)
 
@@ -83,7 +83,7 @@ Most LLM-to-robot integrations today are one-off scripts — they hardcode topic
 - **Multi-robot namespace support** — run multiple grounding + dispatcher stacks in the same ROS 2 graph, each scoped to its own robot namespace
 - **LLM-agnostic** — works with OpenAI, Anthropic Claude, local Ollama models, or any custom backend you implement
 - **Robot-agnostic** — works on any ROS 2 robot: mobile manipulators, wheeled AMRs, robotic arms, drones, AUVs, humanoids
-- **ROS-free core** — the schema, registry, and grounding engine have zero ROS 2 dependencies and can be unit tested independently (41 tests, run in ~0.2 s)
+- **ROS-free core** — the schema, registry, and grounding engine have zero ROS 2 dependencies and can be unit tested independently (80 tests, run in ~0.2 s)
 - **Mock package included** — `ros2_lingua_mock` ships full simulated nodes, a CLI tool, a web dashboard, and a one-command launch file so you can demo and develop without touching a real robot
 
 ---
@@ -708,7 +708,7 @@ cd ros2_lingua_core
 python3 -m pytest tests/test_core.py -v
 ```
 
-41 tests cover the capability schema, registry, tag filtering, backward chaining planner, grounding engine, error hierarchy, retry logic, and hallucination protection. They run in approximately 0.2 seconds.
+80 tests cover the capability schema, registry, tag filtering, backward chaining planner, grounding engine, error hierarchy, retry logic, and hallucination protection. They run in approximately 0.2 seconds.
 
 ### Integration tests (ROS 2 + Ollama required)
 
@@ -782,7 +782,7 @@ ros2_lingua/
 │   │   ├── backends.py             # OpenAI, Anthropic, Ollama, Mock, RetryConfig
 │   │   └── errors.py               # LinguaError hierarchy (11 specific types)
 │   ├── tests/
-│   │   └── test_core.py            # 41 unit tests, no ROS required (~0.2 s)
+│   │   └── test_core.py            # 80 unit tests, no ROS required (~0.2 s)
 │   ├── package.xml
 │   └── setup.py
 │

@@ -151,6 +151,18 @@ for self-contained tasks that don't require deep familiarity with the codebase.
 See the [issues page](https://github.com/purahan/ros2_lingua/issues) for 
 the current list — typically small CLI/docs/mock-node additions.
 
+
+### Claiming an Issue
+Found an issue you'd like to work on? Comment `/assign-me` on it and 
+you'll be assigned automatically — no need to wait for a maintainer.
+
+- `/assign-me` — assign yourself to the issue
+- `/unassign-me` — release the issue if you can no longer work on it
+
+If an issue is assigned but shows no activity for a while, it will be 
+automatically unassigned so others can pick it up.
+
+
 ### Larger Contributions
 - **Voice input** — Whisper integration for spoken natural language instructions
 - **Capability versioning** — detect and handle schema drift when nodes are updated independently

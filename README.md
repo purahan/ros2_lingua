@@ -77,7 +77,7 @@ Most LLM-to-robot integrations today are one-off scripts i.e. they hardcode topi
 - **Automatic prerequisite chaining**: a backward-chaining planner resolves dependencies between capabilities automatically, so you never hardcode execution sequences
 - **Hallucination protection**: every capability the LLM suggests is validated against the registered capability list before a single action is dispatched
 - **Tag-based filtering**: annotate capabilities with standard tags (`Tags.LOCOMOTION`, `Tags.MANIPULATION`, etc.) and scope grounding to only relevant capability subsets
-- **Rich error handling**: 11 specific exception types, all inheriting from `LinguaError`, so you catch exactly what you care about
+- **Rich error handling**: 15 specific exception types, all inheriting from `LinguaError`, so you catch exactly what you care about
 - **Configurable retries**: `RetryConfig` with exponential back-off for flaky LLM backends or rate-limited APIs
 - **Python and C++ support**: Python nodes use `LinguaMixin`; C++ controller nodes use the header-only `ros2_lingua_cpp` package, no compilation overhead
 - **Multi-robot namespace support**: run multiple grounding + dispatcher stacks in the same ROS 2 graph, each scoped to its own robot namespace
@@ -631,7 +631,7 @@ class MyBackend:
 
 ## Error Handling
 
-11 specific exception types, all inheriting from `LinguaError`. Catch exactly what you care about.
+15 specific exception types, all inheriting from `LinguaError`. Catch exactly what you care about.
 
 ```python
 from ros2_lingua_core import (

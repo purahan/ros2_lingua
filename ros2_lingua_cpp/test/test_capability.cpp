@@ -117,7 +117,11 @@ TEST(TagsTest, Constants) {
   EXPECT_STREQ(lingua::Tags::MANIPULATION, "manipulation");
   EXPECT_STREQ(lingua::Tags::BALANCE, "balance");
   EXPECT_STREQ(lingua::Tags::PERCEPTION, "perception");
+  EXPECT_STREQ(lingua::Tags::MAPPING, "mapping");
   EXPECT_STREQ(lingua::Tags::SPEECH, "speech");
+  EXPECT_STREQ(lingua::Tags::SOCIAL, "social");
+  EXPECT_STREQ(lingua::Tags::SYSTEM, "system");
   EXPECT_STREQ(lingua::Tags::SAFETY, "safety");
   EXPECT_STREQ(lingua::Tags::NAVIGATION, "navigation");
+  EXPECT_STREQ(lingua::Tags::INSPECTION, "inspection");
 }

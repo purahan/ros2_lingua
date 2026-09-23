@@ -38,6 +38,8 @@ class LinguaCLI(Node):
         self._instruction = instruction
         self._done = False
 
+        namespace = namespace.strip("/")
+        namespace = namespace.strip("/")
         prefix = f"/{namespace}" if namespace else ""
         self._service_name = f"{prefix}/lingua/ground"
 

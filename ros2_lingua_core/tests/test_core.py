@@ -419,9 +419,7 @@ class TestGroundingEngine:
             ("[]", "top-level JSON value must be an object"),
         ],
     )
-    def test_malformed_response_shapes_are_infeasible(
-        self, registry, response, expected_reason
-    ):
+    def test_malformed_response_shapes_are_infeasible(self, registry, response, expected_reason):
         engine = GroundingEngine(registry, MockBackend(response), auto_chain=False)
         plan = engine.ground("anything")
 

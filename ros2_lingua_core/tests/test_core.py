@@ -591,6 +591,29 @@ class TestParameterValidation:
         with pytest.raises(ParameterValidationError):
             ParameterValidator().validate(cap, {"count": 3.5})
 
+    def test_float_non_finite_fails(self):
+        from ros2_lingua_core import ParameterValidationError, ParameterValidator
+
+        cap = self._make_cap([CapabilityParameter("speed", "float", "speed")])
+        for val in [float("nan"), float("inf"), float("-inf"), "nan", "inf", "-inf"]:
+            with pytest.raises(ParameterValidationError):
+                ParameterValidator().validate(cap, {"speed": val})
+
+    def test_float_rejects_bool(self):
+        from ros2_lingua_core import ParameterValidationError, ParameterValidator
+
+        cap = self._make_cap([CapabilityParameter("speed", "float", "speed")])
+        with pytest.raises(ParameterValidationError):
+            ParameterValidator().validate(cap, {"speed": True})
+
+    def test_int_non_finite_float_fails(self):
+        from ros2_lingua_core import ParameterValidationError, ParameterValidator
+
+        cap = self._make_cap([CapabilityParameter("count", "int", "count")])
+        for val in [float("inf"), float("-inf"), float("nan")]:
+            with pytest.raises(ParameterValidationError):
+                ParameterValidator().validate(cap, {"count": val})
+
     def test_int_from_string(self):
         from ros2_lingua_core import ParameterValidator
 

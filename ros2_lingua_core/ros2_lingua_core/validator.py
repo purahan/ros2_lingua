@@ -14,13 +14,14 @@ Design principles:
 
 Type coercion rules:
   "string"          → str (always coercible)
-  "float"/"double"  → float (coerces int, numeric str; rejects non-numeric)
-  "int"/"integer"   → int (coerces float if whole number, numeric str)
+  "float"/"double"  → float (coerces int, numeric str; rejects non-numeric, non-finite, bool)
+  "int"/"integer"   → int (coerces float if whole number, numeric str; rejects non-finite)
   "bool"/"boolean"  → bool (coerces "true"/"false"/"1"/"0")
   "list"/"array"    → list (coerces JSON array string)
   anything else     → pass through unchanged (ROS message types etc.)
 """
 
+import math
 from typing import Any
 
 from .errors import ParameterValidationError
@@ -208,23 +209,34 @@ class ParameterValidator:
         return str(value), None
 
     def _to_float(self, value, param_def):
+        if isinstance(value, bool):
+            return None, (f"expected float, got bool ('{value}')")
         if isinstance(value, float):
+            if not math.isfinite(value):
+                return None, (f"expected float, got non-finite value ({value})")
             return value, None
         if isinstance(value, int):
             return float(value), None
         if isinstance(value, str):
             try:
-                return float(value), None
+                f = float(value)
             except ValueError:
                 return None, (
                     f"expected float, got str ('{value}'). Examples of valid values: 0.5, 1.0, 2"
                 )
+            if not math.isfinite(f):
+                return None, (
+                    f"expected float, got str ('{value}') — non-finite values are not allowed"
+                )
+            return f, None
         return None, (f"expected float, got {type(value).__name__} ('{value}')")
 
     def _to_int(self, value, param_def):
         if isinstance(value, int) and not isinstance(value, bool):
             return value, None
         if isinstance(value, float):
+            if not math.isfinite(value):
+                return None, (f"expected int, got non-finite float ({value})")
             if value == int(value):
                 return int(value), None
             return None, (f"expected int, got float ({value}) — fractional values are not allowed")

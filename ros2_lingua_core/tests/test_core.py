@@ -409,6 +409,7 @@ class TestGroundingEngine:
         ("response", "expected_reason"),
         [
             ('{"feasible": "false", "steps": []}', "'feasible' must be a boolean"),
+            ('{"feasible": 1, "steps": []}', "'feasible' must be a boolean"),
             ('{"steps": {}}', "'steps' must be a list"),
             ('{"steps": [null]}', "steps[0] must be an object"),
             (

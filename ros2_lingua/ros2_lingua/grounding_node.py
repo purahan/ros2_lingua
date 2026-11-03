@@ -46,7 +46,9 @@ class GroundingNode(Node):
 
         # --- Parameters ---
         self.declare_parameter("llm_backend", "openai")     # openai | anthropic | ollama | mock
-        self.declare_parameter("llm_model", "gpt-4o")
+        # Empty means "use the backend's own default" so anthropic/ollama are
+        # not handed the OpenAI default model name by mistake (#42).
+        self.declare_parameter("llm_model", "")
         self.declare_parameter("ollama_host", "http://localhost:11434")
         self.declare_parameter("auto_chain", True)
         self.declare_parameter("cache_ttl_sec", 0.0)
@@ -94,7 +96,7 @@ class GroundingNode(Node):
 
     def _build_engine(self) -> GroundingEngine:
         backend_name = self.get_parameter("llm_backend").value
-        model = self.get_parameter("llm_model").value
+        model = (self.get_parameter("llm_model").value or "").strip()
         auto_chain = self.get_parameter("auto_chain").value
         cache_ttl_sec = self.get_parameter("cache_ttl_sec").value
 
@@ -107,13 +109,25 @@ class GroundingNode(Node):
                 "Export it before launching: export LINGUA_LLM_API_KEY=sk-..."
             )
 
+        default_models = {
+            "openai": "gpt-4o",
+            "anthropic": "claude-sonnet-4-20250514",
+            "ollama": "llama3.1",
+        }
+
         if backend_name == "openai":
-            backend = OpenAIBackend(api_key=api_key, model=model)
+            backend = OpenAIBackend(
+                api_key=api_key, model=model or default_models["openai"]
+            )
         elif backend_name == "anthropic":
-            backend = AnthropicBackend(api_key=api_key, model=model)
+            backend = AnthropicBackend(
+                api_key=api_key, model=model or default_models["anthropic"]
+            )
         elif backend_name == "ollama":
             host = self.get_parameter("ollama_host").value
-            backend = OllamaBackend(model=model, host=host)
+            backend = OllamaBackend(
+                model=model or default_models["ollama"], host=host
+            )
         elif backend_name == "mock":
             from ros2_lingua_core.backends import MockBackend
             backend = MockBackend()

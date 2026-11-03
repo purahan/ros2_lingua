@@ -347,7 +347,7 @@ class GroundingEngine:
             return invalid_response("the top-level JSON value must be an object")
 
         feasible = data.get("feasible", True)
-        if not isinstance(feasible, bool):
+        if type(feasible) is not bool:
             return invalid_response("'feasible' must be a boolean")
 
         reason = data.get("reason", "")

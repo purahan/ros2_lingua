@@ -11,6 +11,7 @@ Using specific exception types instead of bare Exception means:
 Hierarchy:
     LinguaError                     (base)
     ├── LLMBackendError             (LLM call failed)
+    │   ├── LLMAuthError            (credentials rejected)
     │   ├── LLMTimeoutError         (LLM took too long)
     │   ├── LLMRateLimitError       (API rate limit hit)
     │   └── LLMModelNotFoundError   (model doesn't exist)
@@ -43,6 +44,12 @@ class LLMBackendError(LinguaError):
 
 class LLMTimeoutError(LLMBackendError):
     """Raised when the LLM backend does not respond within the timeout."""
+
+    pass
+
+
+class LLMAuthError(LLMBackendError):
+    """Raised when the backend rejects the configured credentials or permissions."""
 
     pass
 

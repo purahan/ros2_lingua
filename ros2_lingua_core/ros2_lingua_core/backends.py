@@ -18,8 +18,10 @@ Available backends:
 import logging
 import time
 from dataclasses import dataclass
+from types import ModuleType
 
 from .errors import (
+    LLMAuthError,
     LLMBackendError,
     LLMModelNotFoundError,
     LLMRateLimitError,
@@ -27,6 +29,29 @@ from .errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _matches_sdk_error(error: Exception, sdk: ModuleType, *names: str) -> bool:
+    error_types: list[type[BaseException]] = []
+    for name in names:
+        error_type = getattr(sdk, name, None)
+        if isinstance(error_type, type) and issubclass(error_type, BaseException):
+            error_types.append(error_type)
+    return bool(error_types) and isinstance(error, tuple(error_types))
+
+
+def _classify_sdk_error(
+    error: Exception, sdk: ModuleType, backend_name: str, model: str
+) -> LLMBackendError:
+    if _matches_sdk_error(error, sdk, "AuthenticationError", "PermissionDeniedError"):
+        return LLMAuthError(f"{backend_name} authentication failed: {error}", original=error)
+    if _matches_sdk_error(error, sdk, "RateLimitError", "OverloadedError"):
+        return LLMRateLimitError(f"{backend_name} rate limit: {error}", original=error)
+    if _matches_sdk_error(error, sdk, "APITimeoutError"):
+        return LLMTimeoutError(f"{backend_name} timeout: {error}", original=error)
+    if _matches_sdk_error(error, sdk, "NotFoundError"):
+        return LLMModelNotFoundError(f"{backend_name} model '{model}' not found.", original=error)
+    return LLMBackendError(f"{backend_name} error: {error}", original=error)
 
 
 # ------------------------------------------------------------------
@@ -95,6 +120,9 @@ def _with_retry(fn, retry_config: RetryConfig, backend_name: str):
         except LLMModelNotFoundError:
             # Never retry model-not-found — it won't fix itself
             raise
+        except LLMAuthError:
+            # Credential and permission failures are permanent until configuration changes.
+            raise
         except LLMBackendError as e:
             last_error = e
             if attempt == retry_config.max_retries:
@@ -134,12 +162,13 @@ class OpenAIBackend:
         retry: RetryConfig = None,
     ):
         try:
-            from openai import OpenAI
+            import openai
         except ImportError:
             raise ImportError(
                 "openai package is required for OpenAIBackend. Install with: pip install openai"
             ) from None
-        self._client = OpenAI(api_key=api_key, timeout=timeout_sec)  # type: ignore
+        self._openai = openai
+        self._client = openai.OpenAI(api_key=api_key, timeout=timeout_sec, max_retries=0)
         self._model = model
         self._retry = retry or RetryConfig()
 
@@ -153,17 +182,7 @@ class OpenAIBackend:
                 )
                 return response.choices[0].message.content or ""
             except Exception as e:
-                err_str = str(e).lower()
-                if "rate limit" in err_str or "429" in err_str:
-                    raise LLMRateLimitError(f"OpenAI rate limit: {e}", original=e) from e
-                elif "timeout" in err_str or "timed out" in err_str:
-                    raise LLMTimeoutError(f"OpenAI timeout: {e}", original=e) from e
-                elif "model" in err_str and "not found" in err_str:
-                    raise LLMModelNotFoundError(
-                        f"OpenAI model '{self._model}' not found.", original=e
-                    ) from e
-                else:
-                    raise LLMBackendError(f"OpenAI error: {e}", original=e) from e
+                raise _classify_sdk_error(e, self._openai, "OpenAI", self._model) from e
 
         return _with_retry(_call, self._retry, "OpenAI")
 
@@ -198,7 +217,8 @@ class AnthropicBackend:
                 "anthropic package is required for AnthropicBackend. "
                 "Install with: pip install anthropic"
             ) from None
-        self._client = anthropic.Anthropic(api_key=api_key)  # type: ignore
+        self._anthropic = anthropic
+        self._client = anthropic.Anthropic(api_key=api_key, max_retries=0)
         self._model = model
         self._max_tokens = max_tokens
         self._timeout_sec = timeout_sec
@@ -223,17 +243,7 @@ class AnthropicBackend:
                 )
                 return response.content[0].text
             except Exception as e:
-                err_str = str(e).lower()
-                if "rate limit" in err_str or "529" in err_str or "overloaded" in err_str:
-                    raise LLMRateLimitError(f"Anthropic rate limit: {e}", original=e) from e
-                elif "timeout" in err_str:
-                    raise LLMTimeoutError(f"Anthropic timeout: {e}", original=e) from e
-                elif "model" in err_str and ("not found" in err_str or "invalid" in err_str):
-                    raise LLMModelNotFoundError(
-                        f"Anthropic model '{self._model}' not found.", original=e
-                    ) from e
-                else:
-                    raise LLMBackendError(f"Anthropic error: {e}", original=e) from e
+                raise _classify_sdk_error(e, self._anthropic, "Anthropic", self._model) from e
 
         return _with_retry(_call, self._retry, "Anthropic")
 
@@ -284,23 +294,31 @@ class OllamaBackend:
                 )
                 return response["message"]["content"]
             except Exception as e:
-                err_str = str(e).lower()
-                if "not found" in err_str or "404" in err_str:
-                    raise LLMModelNotFoundError(
-                        f"Ollama model '{self._model}' not found. "
-                        f"Pull it with: ollama pull {self._model}",
-                        original=e,
-                    ) from e
-                elif "timeout" in err_str or "timed out" in err_str:
+                if _matches_sdk_error(e, self._ollama, "ResponseError"):
+                    status_code = getattr(e, "status_code", None)
+                    if status_code in (401, 403):
+                        raise LLMAuthError(f"Ollama authentication failed: {e}", original=e) from e
+                    if status_code == 404:
+                        raise LLMModelNotFoundError(
+                            f"Ollama model '{self._model}' not found. "
+                            f"Pull it with: ollama pull {self._model}",
+                            original=e,
+                        ) from e
+                    if status_code == 408:
+                        raise LLMTimeoutError(f"Ollama request timed out: {e}", original=e) from e
+                    if status_code == 429:
+                        raise LLMRateLimitError(
+                            f"Ollama rate limit exceeded: {e}", original=e
+                        ) from e
+                if isinstance(e, TimeoutError):
                     raise LLMTimeoutError(f"Ollama timeout: {e}", original=e) from e
-                elif "connection" in err_str or "refused" in err_str:
+                if isinstance(e, ConnectionError):
                     raise LLMBackendError(
                         f"Cannot connect to Ollama at {self._host}. "
                         "Is Ollama running? Try: ollama serve",
                         original=e,
                     ) from e
-                else:
-                    raise LLMBackendError(f"Ollama error: {e}", original=e) from e
+                raise LLMBackendError(f"Ollama error: {e}", original=e) from e
 
         return _with_retry(_call, self._retry, "Ollama")
 

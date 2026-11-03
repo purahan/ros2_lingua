@@ -335,11 +335,33 @@ class GroundingEngine:
                 reason=f"LLM returned invalid JSON: {e}. Raw response: {raw[:200]}",
             )
 
+        def _malformed(detail: str) -> ActionPlan:
+            return ActionPlan(
+                steps=[],
+                original_instruction=instruction,
+                feasible=False,
+                reason=f"LLM returned a malformed plan: {detail}",
+            )
+
+        if not isinstance(data, dict):
+            return _malformed(f"expected a JSON object, got {type(data).__name__}")
+
         feasible = data.get("feasible", True)
+        if not isinstance(feasible, bool):
+            return _malformed(f"'feasible' must be a boolean, got {type(feasible).__name__}")
+
         reason = data.get("reason", "")
+        raw_steps = data.get("steps", [])
+        if not isinstance(raw_steps, list):
+            return _malformed(f"'steps' must be a list, got {type(raw_steps).__name__}")
+
         steps = []
 
-        for step_data in data.get("steps", []):
+        for step_data in raw_steps:
+            if not isinstance(step_data, dict):
+                return _malformed(f"each step must be an object, got {type(step_data).__name__}")
+            if not isinstance(step_data.get("parameters", {}), dict):
+                return _malformed("'parameters' must be an object")
             cap_name = step_data.get("capability_name", "")
             # Validate that the capability actually exists
             if self._registry.get(cap_name) is None:

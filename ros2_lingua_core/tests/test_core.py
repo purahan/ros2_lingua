@@ -349,6 +349,30 @@ class TestGroundingEngine:
         assert plan.steps[0].capability_name == "navigate_to_location"
         assert plan.steps[0].parameters["location_name"] == "table"
 
+    @pytest.mark.parametrize(
+        "payload, expected",
+        [
+            ({"feasible": "false", "steps": []}, "'feasible' must be a boolean"),
+            ({"feasible": True, "steps": "navigate"}, "'steps' must be a list"),
+            ({"feasible": True, "steps": {"a": 1}}, "'steps' must be a list"),
+            ({"feasible": True, "steps": ["navigate_to_location"]}, "each step must be an object"),
+            (
+                {
+                    "feasible": True,
+                    "steps": [{"capability_name": "stabilize_robot", "parameters": []}],
+                },
+                "'parameters' must be an object",
+            ),
+            ([{"feasible": True}], "expected a JSON object"),
+        ],
+    )
+    def test_malformed_response_shapes_are_infeasible(self, registry, payload, expected):
+        engine = GroundingEngine(registry, MockBackend(json.dumps(payload)), auto_chain=False)
+        plan = engine.ground("go to the table")
+        assert plan.feasible is False
+        assert plan.steps == []
+        assert expected in plan.reason
+
     def test_auto_chain_inserts_prerequisites(self, registry):
         # LLM suggests navigate_to_location but robot_is_balanced is not set
         mock_response = json.dumps(

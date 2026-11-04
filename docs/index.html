@@ -585,9 +585,9 @@ engine = GroundingEngine(
     registry=registry,
     backend=OllamaBackend(model=<span class="text-secondary">"llama3.1"</span>),
     auto_chain=<span class="text-primary-fixed-dim">True</span>,   <span class="text-outline"># insert prerequisites automatically</span>
-    max_retries=<span class="text-amber">3</span>,      <span class="text-outline"># retry on timeout/rate limit</span>
-    retry_delay=<span class="text-amber">1.0</span>,    <span class="text-outline"># initial wait in seconds</span>
-    retry_backoff=<span class="text-amber">2.0</span>,  <span class="text-outline"># multiply wait on each retry</span>
+    max_retries=<span class="text-amber">3</span>,      <span class="text-outline"># attempts for malformed JSON responses</span>
+    retry_delay=<span class="text-amber">1.0</span>,    <span class="text-outline"># initial JSON retry wait in seconds</span>
+    retry_backoff=<span class="text-amber">2.0</span>,  <span class="text-outline"># multiply wait on each JSON retry</span>
 )
 
 <span class="text-outline"># Ground an instruction</span>
@@ -893,7 +893,7 @@ backend = OllamaBackend(model=<span class="text-secondary">"llama3.1"</span>, re
           <span class="text-secondary">Error Handling</span>
         </nav>
         <h1 class="font-h1 text-h1 text-on-surface mb-4">Error Handling</h1>
-        <p class="font-body-lg text-body-lg text-on-surface-variant mb-8">11 specific exception types, all inheriting from <code class="text-secondary bg-secondary/10 px-1.5 py-0.5 rounded text-sm">LinguaError</code>. Catch exactly what you care about.</p>
+        <p class="font-body-lg text-body-lg text-on-surface-variant mb-8">16 specific exception types, all inheriting from <code class="text-secondary bg-secondary/10 px-1.5 py-0.5 rounded text-sm">LinguaError</code>. Catch exactly what you care about.</p>
 
         <div class="glass-card rounded-xl overflow-hidden mb-6">
           <div class="flex items-center justify-between px-5 py-3 border-b border-outline-variant/20 bg-surface-container-high/30">
@@ -904,6 +904,7 @@ backend = OllamaBackend(model=<span class="text-secondary">"llama3.1"</span>, re
 <pre><code class="text-on-surface-variant text-sm"><span class="text-primary-fixed-dim">from</span> ros2_lingua_core <span class="text-primary-fixed-dim">import</span> (
     LinguaError,            <span class="text-outline"># catch all ros2_lingua errors</span>
     LLMBackendError,        <span class="text-outline"># any LLM connectivity problem</span>
+    LLMAuthError,           <span class="text-outline"># credentials or permissions rejected</span>
     LLMTimeoutError,        <span class="text-outline"># LLM took too long</span>
     LLMRateLimitError,      <span class="text-outline"># API rate limit hit</span>
     LLMModelNotFoundError,  <span class="text-outline"># model doesn't exist</span>

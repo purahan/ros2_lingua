@@ -24,7 +24,6 @@ from typing import Any, Protocol
 
 from .errors import (
     LLMBackendError,
-    LLMTimeoutError,
     ParameterValidationError,
 )
 from .registry import CapabilityRegistry
@@ -175,8 +174,8 @@ class GroundingEngine:
             registry:        The CapabilityRegistry with all registered capabilities
             backend:         Any object implementing the LLMBackend protocol
             auto_chain:      Insert missing prerequisites automatically. Default True.
-            max_retries:     Maximum LLM call attempts before giving up. Default 3.
-            retry_delay:     Initial delay between retries in seconds. Default 1.0.
+            max_retries:     Maximum attempts to obtain valid JSON. Default 3.
+            retry_delay:     Initial delay between malformed-response attempts. Default 1.0.
             retry_backoff:   Multiply retry_delay by this each attempt. Default 2.0.
             validate_params: Validate and coerce LLM parameter values against the
                              capability schema before returning the plan. Default True.
@@ -204,21 +203,16 @@ class GroundingEngine:
         """
         Ground a natural language instruction into an ActionPlan.
 
-        Automatically retries on transient backend failures (connection issues,
-        timeouts, rate limits) with exponential backoff. Non-retryable errors
-        (bad API key, empty registry, hallucinated capabilities) fail immediately.
+        Backend RetryConfig controls provider retries. The engine retries only
+        malformed JSON responses.
 
         Args:
             instruction: Natural language command, e.g. "go to the kitchen"
             tag_filter: Optional list of tags to filter the capability context.
 
         Returns:
-            ActionPlan with ordered steps ready for dispatch
-
-        Raises:
-            EmptyRegistryError: If no capabilities are registered
-            BackendAuthError: If API key is invalid (not retried)
-            MaxRetriesExceededError: If all retry attempts fail
+            ActionPlan with ordered steps ready for dispatch. Backend failures
+            and exhausted malformed-JSON retries return an infeasible plan.
         """
         if not self._registry.get_all():
             return ActionPlan(
@@ -256,14 +250,55 @@ class GroundingEngine:
             {"role": "user", "content": instruction},
         ]
 
-        last_error: Exception | None = None
+        last_parse_error: str | None = None
         delay = self._retry_delay
 
         for attempt in range(1, self._max_retries + 1):
             try:
                 raw_response = self._backend.complete(messages)
-                plan = self._parse_response(raw_response, instruction)
+            except LLMBackendError as e:
+                logger.error(f"LLM backend failed: {e}")
+                return ActionPlan(
+                    steps=[],
+                    original_instruction=instruction,
+                    feasible=False,
+                    reason=f"LLM backend error: {e}",
+                )
+            except Exception as e:
+                logger.error(f"Unexpected grounding error: {e}")
+                return ActionPlan(
+                    steps=[],
+                    original_instruction=instruction,
+                    feasible=False,
+                    reason=f"Unexpected error: {e}",
+                )
 
+            try:
+                plan = self._parse_response(raw_response, instruction)
+            except json.JSONDecodeError as e:
+                last_parse_error = (
+                    f"LLM returned invalid JSON: {e}. Raw response: {raw_response[:200]}"
+                )
+                if attempt < self._max_retries:
+                    logger.warning(
+                        f"LLM returned invalid JSON on attempt {attempt}/{self._max_retries}. "
+                        f"Retrying in {delay:.1f}s..."
+                    )
+                    time.sleep(delay)
+                    delay *= self._retry_backoff
+                    continue
+                break
+
+            except Exception as e:
+                logger.error(f"Unexpected grounding error: {e}")
+                return ActionPlan(
+                    steps=[],
+                    original_instruction=instruction,
+                    feasible=False,
+                    reason=f"Unexpected error: {e}",
+                )
+
+            try:
                 if plan.feasible and self._auto_chain:
                     plan = self._apply_auto_chaining(plan, instruction)
 
@@ -271,29 +306,6 @@ class GroundingEngine:
                     self._plan_cache[cache_key] = (plan, time.time())
 
                 return plan
-
-            except LLMTimeoutError as e:
-                last_error = e
-                if attempt < self._max_retries:
-                    logger.warning(
-                        f"LLM timeout on attempt {attempt}/{self._max_retries}. "
-                        f"Retrying in {delay:.1f}s..."
-                    )
-                    time.sleep(delay)
-                    delay *= self._retry_backoff
-
-            except LLMBackendError as e:
-                last_error = e
-                if attempt < self._max_retries:
-                    logger.warning(
-                        f"LLM backend error on attempt {attempt}/{self._max_retries}: {e}. "
-                        f"Retrying in {delay:.1f}s..."
-                    )
-                    time.sleep(delay)
-                    delay *= self._retry_backoff
-                else:
-                    logger.error(f"LLM backend failed after {self._max_retries} attempts: {e}")
-
             except Exception as e:
                 logger.error(f"Unexpected grounding error: {e}")
                 return ActionPlan(
@@ -307,9 +319,7 @@ class GroundingEngine:
             steps=[],
             original_instruction=instruction,
             feasible=False,
-            reason=(
-                f"Grounding failed after {self._max_retries} attempts. Last error: {last_error}"
-            ),
+            reason=last_parse_error or "No response attempts were configured.",
         )
 
     def _parse_response(self, raw: str, instruction: str) -> ActionPlan:
@@ -325,15 +335,7 @@ class GroundingEngine:
             cleaned = "\n".join(lines[:-1])
         cleaned = cleaned.strip()
 
-        try:
-            data = json.loads(cleaned)
-        except json.JSONDecodeError as e:
-            return ActionPlan(
-                steps=[],
-                original_instruction=instruction,
-                feasible=False,
-                reason=f"LLM returned invalid JSON: {e}. Raw response: {raw[:200]}",
-            )
+        data = json.loads(cleaned)
 
         def invalid_response(message: str) -> ActionPlan:
             return ActionPlan(

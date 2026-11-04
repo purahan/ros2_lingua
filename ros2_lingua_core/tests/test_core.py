@@ -548,6 +548,329 @@ class TestRobustness:
         plan = engine.ground("do nav")
         assert plan.feasible
 
+    def test_grounding_engine_does_not_retry_model_errors(self, registry):
+        from ros2_lingua_core import LLMModelNotFoundError
+
+        class FailingBackend:
+            calls = 0
+
+            def complete(self, messages):
+                self.calls += 1
+                raise LLMModelNotFoundError("model not found")
+
+        backend = FailingBackend()
+        engine = GroundingEngine(registry, backend, auto_chain=False, max_retries=3, retry_delay=0)
+
+        plan = engine.ground("go to the table")
+
+        assert not plan.feasible
+        assert backend.calls == 1
+        assert "model not found" in plan.reason
+
+    def test_grounding_engine_retries_only_invalid_json(self, registry):
+        import json
+
+        class ResponseSequenceBackend:
+            def __init__(self):
+                self.responses = iter(
+                    [
+                        "not json",
+                        json.dumps(
+                            {
+                                "feasible": True,
+                                "reason": "",
+                                "steps": [
+                                    {
+                                        "capability_name": "navigate_to_location",
+                                        "parameters": {"location_name": "table"},
+                                        "rationale": "go",
+                                    }
+                                ],
+                            }
+                        ),
+                    ]
+                )
+                self.calls = 0
+
+            def complete(self, messages):
+                self.calls += 1
+                return next(self.responses)
+
+        backend = ResponseSequenceBackend()
+        engine = GroundingEngine(registry, backend, auto_chain=False, max_retries=2, retry_delay=0)
+
+        plan = engine.ground("go to the table")
+
+        assert plan.feasible
+        assert backend.calls == 2
+
+    def test_openai_authentication_failure_is_not_retried(self, monkeypatch, registry):
+        import sys
+        import time
+        from types import ModuleType, SimpleNamespace
+
+        from ros2_lingua_core import OpenAIBackend, RetryConfig
+
+        class AuthenticationError(Exception):
+            pass
+
+        calls = 0
+        client_options = {}
+
+        class FakeOpenAI:
+            def __init__(self, **kwargs):
+                client_options.update(kwargs)
+                self.chat = SimpleNamespace(
+                    completions=SimpleNamespace(create=self.create_completion)
+                )
+
+            def create_completion(self, **kwargs):
+                nonlocal calls
+                calls += 1
+                raise AuthenticationError("invalid API key")
+
+        sdk = ModuleType("openai")
+        sdk.OpenAI = FakeOpenAI
+        sdk.AuthenticationError = AuthenticationError
+        monkeypatch.setitem(sys.modules, "openai", sdk)
+        monkeypatch.setattr(time, "sleep", lambda _: None)
+
+        backend = OpenAIBackend(
+            api_key="invalid",
+            retry=RetryConfig(max_retries=3, base_delay_sec=0),
+        )
+        engine = GroundingEngine(registry, backend, auto_chain=False, max_retries=3, retry_delay=0)
+
+        plan = engine.ground("go to the table")
+
+        assert not plan.feasible
+        assert calls == 1
+        assert client_options["max_retries"] == 0
+        assert "invalid API key" in plan.reason
+
+    def test_openai_retries_transient_backend_errors(self, monkeypatch):
+        import sys
+        import time
+        from types import ModuleType, SimpleNamespace
+
+        from ros2_lingua_core import OpenAIBackend, RetryConfig
+
+        class APIConnectionError(Exception):
+            pass
+
+        calls = 0
+        client_options = {}
+
+        class FakeOpenAI:
+            def __init__(self, **kwargs):
+                client_options.update(kwargs)
+                self.chat = SimpleNamespace(
+                    completions=SimpleNamespace(create=self.create_completion)
+                )
+
+            def create_completion(self, **kwargs):
+                nonlocal calls
+                calls += 1
+                if calls < 3:
+                    raise APIConnectionError("connection reset")
+                return SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))]
+                )
+
+        sdk = ModuleType("openai")
+        sdk.OpenAI = FakeOpenAI
+        sdk.APIConnectionError = APIConnectionError
+        monkeypatch.setitem(sys.modules, "openai", sdk)
+        monkeypatch.setattr(time, "sleep", lambda _: None)
+
+        backend = OpenAIBackend(
+            api_key="test",
+            retry=RetryConfig(max_retries=2, base_delay_sec=0),
+        )
+
+        assert backend.complete([]) == "ok"
+        assert calls == 3
+        assert client_options["max_retries"] == 0
+
+    def test_openai_model_not_found_is_not_retried(self, monkeypatch):
+        import sys
+        import time
+        from types import ModuleType, SimpleNamespace
+
+        import pytest
+
+        from ros2_lingua_core import LLMModelNotFoundError, OpenAIBackend, RetryConfig
+
+        class NotFoundError(Exception):
+            pass
+
+        calls = 0
+
+        class FakeOpenAI:
+            def __init__(self, **kwargs):
+                self.chat = SimpleNamespace(
+                    completions=SimpleNamespace(create=self.create_completion)
+                )
+
+            def create_completion(self, **kwargs):
+                nonlocal calls
+                calls += 1
+                raise NotFoundError("model not found")
+
+        sdk = ModuleType("openai")
+        sdk.OpenAI = FakeOpenAI
+        sdk.NotFoundError = NotFoundError
+        monkeypatch.setitem(sys.modules, "openai", sdk)
+        monkeypatch.setattr(time, "sleep", lambda _: None)
+
+        backend = OpenAIBackend(
+            api_key="test",
+            model="missing-model",
+            retry=RetryConfig(max_retries=3, base_delay_sec=0),
+        )
+
+        with pytest.raises(LLMModelNotFoundError, match="missing-model.*not found"):
+            backend.complete([])
+
+        assert calls == 1
+
+    def test_anthropic_authentication_failure_is_not_retried(self, monkeypatch):
+        import sys
+        import time
+        from types import ModuleType, SimpleNamespace
+
+        import pytest
+
+        from ros2_lingua_core import AnthropicBackend, LLMAuthError, RetryConfig
+
+        class AuthenticationError(Exception):
+            pass
+
+        calls = 0
+        client_options = {}
+
+        class FakeAnthropic:
+            def __init__(self, **kwargs):
+                client_options.update(kwargs)
+                self.messages = SimpleNamespace(create=self.create_message)
+
+            def create_message(self, **kwargs):
+                nonlocal calls
+                calls += 1
+                raise AuthenticationError("invalid API key")
+
+        sdk = ModuleType("anthropic")
+        sdk.Anthropic = FakeAnthropic
+        sdk.AuthenticationError = AuthenticationError
+        monkeypatch.setitem(sys.modules, "anthropic", sdk)
+        monkeypatch.setattr(time, "sleep", lambda _: None)
+
+        backend = AnthropicBackend(
+            api_key="invalid",
+            retry=RetryConfig(max_retries=3, base_delay_sec=0),
+        )
+
+        with pytest.raises(LLMAuthError, match="authentication failed"):
+            backend.complete([])
+
+        assert calls == 1
+        assert client_options["max_retries"] == 0
+
+    def test_anthropic_overloaded_error_respects_rate_limit_policy(self, monkeypatch):
+        import sys
+        import time
+        from types import ModuleType, SimpleNamespace
+
+        import pytest
+
+        from ros2_lingua_core import AnthropicBackend, LLMRateLimitError, RetryConfig
+
+        class OverloadedError(Exception):
+            pass
+
+        calls = 0
+
+        class FakeAnthropic:
+            def __init__(self, **kwargs):
+                self.messages = SimpleNamespace(create=self.create_message)
+
+            def create_message(self, **kwargs):
+                nonlocal calls
+                calls += 1
+                raise OverloadedError("temporarily overloaded")
+
+        sdk = ModuleType("anthropic")
+        sdk.Anthropic = FakeAnthropic
+        sdk.OverloadedError = OverloadedError
+        monkeypatch.setitem(sys.modules, "anthropic", sdk)
+        monkeypatch.setattr(time, "sleep", lambda _: None)
+
+        backend = AnthropicBackend(
+            api_key="test",
+            retry=RetryConfig(max_retries=3, retry_on_rate_limit=False),
+        )
+
+        with pytest.raises(LLMRateLimitError, match="rate limit"):
+            backend.complete([])
+
+        assert calls == 1
+
+    def test_ollama_response_errors_use_typed_status_codes(self, monkeypatch):
+        import sys
+        from types import ModuleType
+
+        import pytest
+
+        from ros2_lingua_core import (
+            LLMAuthError,
+            LLMModelNotFoundError,
+            LLMRateLimitError,
+            LLMTimeoutError,
+            OllamaBackend,
+            RetryConfig,
+        )
+
+        class ResponseError(Exception):
+            def __init__(self, message, status_code):
+                super().__init__(message)
+                self.status_code = status_code
+
+        calls = 0
+        current_status = 401
+
+        def chat(**kwargs):
+            nonlocal calls
+            calls += 1
+            raise ResponseError("request failed", current_status)
+
+        sdk = ModuleType("ollama")
+        sdk.ResponseError = ResponseError
+        sdk.chat = chat
+        monkeypatch.setitem(sys.modules, "ollama", sdk)
+
+        cases = [
+            (401, LLMAuthError),
+            (403, LLMAuthError),
+            (404, LLMModelNotFoundError),
+            (408, LLMTimeoutError),
+            (429, LLMRateLimitError),
+        ]
+        for status_code, expected_error in cases:
+            current_status = status_code
+            calls = 0
+            backend = OllamaBackend(
+                retry=RetryConfig(
+                    max_retries=3,
+                    retry_on_rate_limit=False,
+                    retry_on_timeout=False,
+                )
+            )
+
+            with pytest.raises(expected_error):
+                backend.complete([])
+
+            assert calls == 1
+
 
 # ------------------------------------------------------------------
 # Parameter validation tests

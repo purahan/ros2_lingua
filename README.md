@@ -77,7 +77,7 @@ Most LLM-to-robot integrations today are one-off scripts i.e. they hardcode topi
 - **Automatic prerequisite chaining**: a backward-chaining planner resolves dependencies between capabilities automatically, so you never hardcode execution sequences
 - **Hallucination protection**: every capability the LLM suggests is validated against the registered capability list before a single action is dispatched
 - **Tag-based filtering**: annotate capabilities with standard tags (`Tags.LOCOMOTION`, `Tags.MANIPULATION`, etc.) and scope grounding to only relevant capability subsets
-- **Rich error handling**: 15 specific exception types, all inheriting from `LinguaError`, so you catch exactly what you care about
+- **Rich error handling**: 16 specific exception types, all inheriting from `LinguaError`, so you catch exactly what you care about
 - **Configurable retries**: `RetryConfig` with exponential back-off for flaky LLM backends or rate-limited APIs
 - **Python and C++ support**: Python nodes use `LinguaMixin`; C++ controller nodes use the header-only `ros2_lingua_cpp` package, no compilation overhead
 - **Multi-robot namespace support**: run multiple grounding + dispatcher stacks in the same ROS 2 graph, each scoped to its own robot namespace
@@ -619,6 +619,8 @@ class MyBackend:
         return my_llm_call(messages)   # return the response string
 ```
 
+`RetryConfig` controls provider retries for transient errors. The OpenAI and Anthropic SDK retries are disabled so they do not multiply this count. `GroundingEngine` uses `max_retries`, `retry_delay`, and `retry_backoff` only when a response is not valid JSON. Authentication and model-not-found errors are not retried; `ground()` returns an infeasible `ActionPlan` with the backend error in its reason.
+
 | Backend | API Key | Best for |
 |---|---|---|
 | `OllamaBackend` | None required | Offline robots, privacy-sensitive |
@@ -631,12 +633,13 @@ class MyBackend:
 
 ## Error Handling
 
-15 specific exception types, all inheriting from `LinguaError`. Catch exactly what you care about.
+16 specific exception types, all inheriting from `LinguaError`. Catch exactly what you care about.
 
 ```python
 from ros2_lingua_core import (
     LinguaError,                    # base: catch all ros2_lingua errors
     LLMBackendError,                # any LLM connectivity problem
+    LLMAuthError,                   # backend rejected credentials or permissions
     LLMTimeoutError,                # LLM took too long
     LLMRateLimitError,              # API rate limit hit
     LLMModelNotFoundError,          # model doesn't exist on this backend

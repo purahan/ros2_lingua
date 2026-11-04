@@ -10,6 +10,8 @@ It also handles:
 - Dependency resolution (chaining capabilities via pre/postconditions)
 """
 
+from threading import RLock
+
 from .schema import Capability
 
 
@@ -28,6 +30,8 @@ class CapabilityRegistry:
     """
 
     def __init__(self):
+        self._lock = RLock()
+
         # name -> Capability
         self._capabilities: dict[str, Capability] = {}
 
@@ -43,34 +47,40 @@ class CapabilityRegistry:
         """
         Register a capability. Raises ValueError if malformed or duplicate.
         """
-        capability.validate()
-        if capability.name in self._capabilities:
-            raise ValueError(
-                f"Capability '{capability.name}' is already registered. Use update() to replace it."
-            )
-        self._capabilities[capability.name] = capability
+        with self._lock:
+            capability.validate()
+            if capability.name in self._capabilities:
+                raise ValueError(
+                    f"Capability '{capability.name}' is already registered. Use update() to replace it."
+                )
+            self._capabilities[capability.name] = capability
 
     def update(self, capability: Capability) -> None:
         """Register or overwrite a capability."""
-        capability.validate()
-        self._capabilities[capability.name] = capability
+        with self._lock:
+            capability.validate()
+            self._capabilities[capability.name] = capability
 
     def unregister(self, name: str) -> None:
         """Remove a capability by name."""
-        self._capabilities.pop(name, None)
+        with self._lock:
+            self._capabilities.pop(name, None)
 
     # ------------------------------------------------------------------
     # Lookup
     # ------------------------------------------------------------------
 
     def get(self, name: str) -> Capability | None:
-        return self._capabilities.get(name)
+        with self._lock:
+            return self._capabilities.get(name)
 
     def get_all(self) -> list[Capability]:
-        return list(self._capabilities.values())
+        with self._lock:
+            return list(self._capabilities.values())
 
     def names(self) -> list[str]:
-        return list(self._capabilities.keys())
+        with self._lock:
+            return list(self._capabilities.keys())
 
     def get_by_tag(self, tag: str) -> list[Capability]:
         """
@@ -80,7 +90,8 @@ class CapabilityRegistry:
             locomotion_caps = registry.get_by_tag(Tags.LOCOMOTION)
             manipulation_caps = registry.get_by_tag("manipulation")
         """
-        return [c for c in self._capabilities.values() if tag in c.tags]
+        with self._lock:
+            return [c for c in self._capabilities.values() if tag in c.tags]
 
     def get_by_tags(self, tags: list[str], match: str = "any") -> list[Capability]:
         """
@@ -98,21 +109,24 @@ class CapabilityRegistry:
             # Capabilities tagged as either manipulation OR speech
             caps = registry.get_by_tags(["manipulation", "speech"], match="any")
         """
-        if match == "all":
-            return [c for c in self._capabilities.values() if all(t in c.tags for t in tags)]
-        else:  # "any"
-            return [c for c in self._capabilities.values() if any(t in c.tags for t in tags)]
+        with self._lock:
+            if match == "all":
+                return [c for c in self._capabilities.values() if all(t in c.tags for t in tags)]
+            else:  # "any"
+                return [c for c in self._capabilities.values() if any(t in c.tags for t in tags)]
 
     def get_all_tags(self) -> list[str]:
         """Return a sorted list of all unique tags currently in the registry."""
-        all_tags: set = set()
-        for cap in self._capabilities.values():
-            all_tags.update(cap.tags)
-        return sorted(all_tags)
+        with self._lock:
+            all_tags: set[str] = set()
+            for cap in self._capabilities.values():
+                all_tags.update(cap.tags)
+            return sorted(all_tags)
 
     def get_untagged(self) -> list[Capability]:
         """Return all capabilities that have no tags assigned."""
-        return [c for c in self._capabilities.values() if not c.tags]
+        with self._lock:
+            return [c for c in self._capabilities.values() if not c.tags]
 
     # ------------------------------------------------------------------
     # State management
@@ -120,22 +134,27 @@ class CapabilityRegistry:
 
     def set_state(self, token: str) -> None:
         """Mark a symbolic state token as true."""
-        self._state.add(token)
+        with self._lock:
+            self._state.add(token)
 
     def clear_state(self, token: str) -> None:
         """Mark a symbolic state token as false."""
-        self._state.discard(token)
+        with self._lock:
+            self._state.discard(token)
 
     def update_state(self, tokens: set[str]) -> None:
         """Replace the entire state set."""
-        self._state = set(tokens)
+        with self._lock:
+            self._state = set(tokens)
 
     def get_state(self) -> set[str]:
-        return set(self._state)
+        with self._lock:
+            return set(self._state)
 
     def is_satisfied(self, preconditions: list[str]) -> bool:
         """Returns True if all preconditions are in the current state."""
-        return all(p in self._state for p in preconditions)
+        with self._lock:
+            return all(p in self._state for p in preconditions)
 
     # ------------------------------------------------------------------
     # Dependency resolution
@@ -171,16 +190,17 @@ class CapabilityRegistry:
             ValueError: If a precondition cannot be satisfied by any capability
             RecursionError: If dependency depth exceeds max_depth
         """
-        if current_state is None:
-            current_state = self.get_state()
+        with self._lock:
+            if current_state is None:
+                current_state = self.get_state()
 
-        goal = self.get(goal_capability_name)
-        if goal is None:
-            raise ValueError(f"Capability '{goal_capability_name}' is not registered.")
+            goal = self.get(goal_capability_name)
+            if goal is None:
+                raise ValueError(f"Capability '{goal_capability_name}' is not registered.")
 
-        plan: list[Capability] = []
-        self._backward_chain(goal, current_state, plan, depth=0, max_depth=max_depth)
-        return plan
+            plan: list[Capability] = []
+            self._backward_chain(goal, current_state, plan, depth=0, max_depth=max_depth)
+            return plan
 
     def _backward_chain(
         self,
@@ -227,10 +247,11 @@ class CapabilityRegistry:
 
     def _find_producer(self, token: str) -> Capability | None:
         """Find the first registered capability whose postconditions include token."""
-        for cap in self._capabilities.values():
-            if token in cap.postconditions:
-                return cap
-        return None
+        with self._lock:
+            for cap in self._capabilities.values():
+                if token in cap.postconditions:
+                    return cap
+            return None
 
     # ------------------------------------------------------------------
     # LLM context generation
@@ -250,28 +271,29 @@ class CapabilityRegistry:
             # Only show locomotion and manipulation capabilities
             context = registry.to_llm_context(tags=["locomotion", "manipulation"])
         """
-        if not self._capabilities:
-            return "No capabilities are currently registered."
+        with self._lock:
+            if not self._capabilities:
+                return "No capabilities are currently registered."
 
-        if tags is not None:
-            capabilities = self.get_by_tags(tags, match="any")
-            # Always include untagged capabilities so nothing is accidentally hidden
-            untagged = self.get_untagged()
-            seen = {c.name for c in capabilities}
-            for c in untagged:
-                if c.name not in seen:
-                    capabilities.append(c)
-        else:
-            capabilities = list(self._capabilities.values())
+            if tags is not None:
+                capabilities = self.get_by_tags(tags, match="any")
+                # Always include untagged capabilities so nothing is accidentally hidden
+                untagged = self.get_untagged()
+                seen = {c.name for c in capabilities}
+                for c in untagged:
+                    if c.name not in seen:
+                        capabilities.append(c)
+            else:
+                capabilities = list(self._capabilities.values())
 
-        if not capabilities:
-            return f"No capabilities found matching tags: {tags}"
+            if not capabilities:
+                return f"No capabilities found matching tags: {tags}"
 
-        tag_note = f" (filtered by tags: {tags})" if tags else ""
-        lines = [f"Available robot capabilities{tag_note}:\n"]
-        for cap in capabilities:
-            lines.append(cap.to_llm_description())
-            lines.append("")
+            tag_note = f" (filtered by tags: {tags})" if tags else ""
+            lines = [f"Available robot capabilities{tag_note}:\n"]
+            for cap in capabilities:
+                lines.append(cap.to_llm_description())
+                lines.append("")
 
-        lines.append(f"\nCurrent robot state: {sorted(self._state) or 'none'}")
-        return "\n".join(lines)
+            lines.append(f"\nCurrent robot state: {sorted(self._state) or 'none'}")
+            return "\n".join(lines)

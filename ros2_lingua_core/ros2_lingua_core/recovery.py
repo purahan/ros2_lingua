@@ -43,6 +43,7 @@ class RecoveryConfig:
                                   e.g. "return_to_home". None disables fallback.
         safe_fallback_params:     Parameters for the fallback capability.
         abort_on_fallback_failure: If True, abort even if fallback itself fails.
+        max_replans:              Max grounding attempts per plan execution.
 
     Example:
         RecoveryConfig(
@@ -57,6 +58,7 @@ class RecoveryConfig:
     safe_fallback: str | None = None
     safe_fallback_params: dict[str, Any] = field(default_factory=dict)
     abort_on_fallback_failure: bool = True
+    max_replans: int = 1
 
 
 # ------------------------------------------------------------------
@@ -133,9 +135,10 @@ class RecoveryPlanner:
         self._engine = grounding_engine
         self._registry = registry
 
-        # Track retry counts per step index
+        # Track retry counts per step index and grounding attempts per execution.
         # Key: step_index, Value: number of retries attempted
         self._retry_counts: dict[int, int] = {}
+        self._replan_count: int = 0
 
     @property
     def config(self) -> RecoveryConfig:
@@ -143,8 +146,9 @@ class RecoveryPlanner:
         return self._config
 
     def reset(self) -> None:
-        """Reset retry counters. Call this at the start of a new plan execution."""
+        """Reset retry and replan counters for a new plan execution."""
         self._retry_counts.clear()
+        self._replan_count = 0
 
     def on_step_failed(
         self,
@@ -191,32 +195,40 @@ class RecoveryPlanner:
 
         # ── Strategy 2: Replan ────────────────────────────────────
         if self._config.enable_replan and self._engine is not None:
-            logger.info(
-                f"Recovery: replanning from current state after "
-                f"'{cap_name}' failed. State: {current_state}"
-            )
-            try:
-                # Sync registry state so the backward chainer sees
-                # which postconditions are already satisfied
-                if self._registry is not None:
-                    self._registry.update_state(current_state)
-                new_plan = self._engine.ground(original_instruction, tag_filter=tag_filter)
-                if new_plan.feasible and new_plan.steps:
-                    return RecoveryDecision(
-                        strategy="replan",
-                        new_plan=new_plan,
-                        reason=(
-                            f"Replanned after '{cap_name}' failed. "
-                            f"New plan has {len(new_plan.steps)} step(s). "
-                            f"The backward chainer skipped already-completed work."
-                        ),
-                    )
-                else:
-                    logger.warning(f"Recovery: replan returned infeasible plan — {new_plan.reason}")
+            if self._replan_count >= self._config.max_replans:
+                logger.warning(f"Recovery: replan limit ({self._config.max_replans}) reached.")
+                strategies_tried.append("replan (limit reached)")
+            else:
+                self._replan_count += 1
+                logger.info(
+                    f"Recovery: replanning from current state after "
+                    f"'{cap_name}' failed. State: {current_state}"
+                )
+                try:
+                    # Sync registry state so the backward chainer sees
+                    # which postconditions are already satisfied
+                    if self._registry is not None:
+                        self._registry.update_state(current_state)
+                    new_plan = self._engine.ground(original_instruction, tag_filter=tag_filter)
+                    if new_plan.feasible and new_plan.steps:
+                        self._retry_counts.clear()
+                        return RecoveryDecision(
+                            strategy="replan",
+                            new_plan=new_plan,
+                            reason=(
+                                f"Replanned after '{cap_name}' failed. "
+                                f"New plan has {len(new_plan.steps)} step(s). "
+                                f"The backward chainer skipped already-completed work."
+                            ),
+                        )
+                    else:
+                        logger.warning(
+                            f"Recovery: replan returned infeasible plan — {new_plan.reason}"
+                        )
+                        strategies_tried.append("replan")
+                except Exception as e:
+                    logger.error(f"Recovery: replanning failed — {e}")
                     strategies_tried.append("replan")
-            except Exception as e:
-                logger.error(f"Recovery: replanning failed — {e}")
-                strategies_tried.append("replan")
         elif self._config.enable_replan:
             # Replan enabled but no engine available
             logger.warning(

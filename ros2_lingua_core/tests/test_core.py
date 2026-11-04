@@ -10,6 +10,8 @@ Run with:
 """
 
 import json
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -1230,6 +1232,7 @@ class TestRecoveryPlanner:
         assert config.safe_fallback is None
         assert config.safe_fallback_params == {}
         assert config.abort_on_fallback_failure is True
+        assert config.max_replans == 1
 
     def test_recovery_config_no_replan(self):
         from ros2_lingua_core import RecoveryConfig
@@ -1289,6 +1292,47 @@ class TestRecoveryPlanner:
         # Second failure → replan (retries exhausted)
         d2 = planner.on_step_failed(self._failed_step(), 0, "pick up", set(), "fail again")
         assert d2.strategy == "replan"
+
+    def test_replan_limit_resets_retry_budget_for_new_plan(self):
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
+        engine = Mock()
+        engine.ground.return_value = SimpleNamespace(feasible=True, steps=[self._failed_step()])
+        planner = RecoveryPlanner(
+            RecoveryConfig(max_retries=1, max_replans=1, safe_fallback="return_to_home"),
+            grounding_engine=engine,
+        )
+        failed_step = self._failed_step()
+
+        assert planner.on_step_failed(failed_step, 0, "instr", set(), "err").strategy == "retry"
+        assert planner.on_step_failed(failed_step, 0, "instr", set(), "err").strategy == "replan"
+        assert planner.on_step_failed(failed_step, 0, "instr", set(), "err").strategy == "retry"
+        decision = planner.on_step_failed(failed_step, 0, "instr", set(), "err")
+        assert decision.strategy == "fallback"
+        assert "return_to_home" in decision.reason
+        assert engine.ground.call_count == 1
+
+        planner.reset()
+        assert planner.on_step_failed(failed_step, 0, "instr", set(), "err").strategy == "retry"
+        assert planner.on_step_failed(failed_step, 0, "instr", set(), "err").strategy == "replan"
+        assert engine.ground.call_count == 2
+
+    def test_failed_replan_attempt_counts_toward_limit(self):
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
+        engine = Mock()
+        engine.ground.side_effect = RuntimeError("backend unavailable")
+        planner = RecoveryPlanner(
+            RecoveryConfig(max_retries=0, max_replans=1),
+            grounding_engine=engine,
+        )
+
+        first = planner.on_step_failed(self._failed_step(), 0, "instr", set(), "err")
+        second = planner.on_step_failed(self._failed_step(), 0, "instr", set(), "err")
+        assert first.strategy == "abort"
+        assert second.strategy == "abort"
+        assert "limit reached" in second.reason
+        assert engine.ground.call_count == 1
 
     def test_retry_count_tracks_per_step(self):
         """Each step has independent retry counters."""

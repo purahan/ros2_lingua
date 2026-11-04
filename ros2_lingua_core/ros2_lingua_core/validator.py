@@ -253,9 +253,7 @@ class ParameterValidator:
                 )
             if f == int(f):
                 return int(f), None
-            return None, (
-                f"expected int, got str ('{value}') — fractional values are not allowed"
-            )
+            return None, (f"expected int, got str ('{value}') — fractional values are not allowed")
         return None, (f"expected int, got {type(value).__name__} ('{value}')")
 
     def _to_bool(self, value, param_def):

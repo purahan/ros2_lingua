@@ -7,6 +7,7 @@
   <license>Apache-2.0</license>
 
   <depend>rclpy</depend>
+  <depend>action_msgs</depend>
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
   <depend>ros2_lingua_core</depend>

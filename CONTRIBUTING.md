@@ -153,14 +153,25 @@ the current list — typically small CLI/docs/mock-node additions.
 
 
 ### Claiming an Issue
-Found an issue you'd like to work on? Comment `/assign-me` on it and 
-you'll be assigned automatically — no need to wait for a maintainer.
+**Claim an issue before you start working on it, and wait until you're assigned before opening a PR.**
+This keeps two people from doing the same work, and it's fair to whoever asked first.
 
-- `/assign-me` — assign yourself to the issue
-- `/unassign-me` — release the issue if you can no longer work on it
+1. Comment `/assign-me` on the issue. The bot assigns you right away if nobody else has it.
+2. Once you're assigned, start working. If you have questions about the approach, ask them on the issue before writing a lot of code.
+3. Open your PR and link the issue (`Fixes #123`).
 
-If an issue is assigned but shows no activity for a while, it will be 
-automatically unassigned so others can pick it up.
+- `/assign-me`: assign yourself to the issue
+- `/unassign-me`: release the issue if you can no longer work on it
+
+**Rules**
+- **Assigned issues only.** If you open a PR for an issue that isn't assigned to you, it may be closed without review, even if the code is good. That includes issues that are assigned to someone else.
+- **First claim wins.** If an issue is already assigned, don't start on it. Comment on the issue if you want to help, or pick another one.
+- **One `good first issue` at a time.** Finish or release one before claiming the next, so newcomers all get a chance.
+- **Inactive claims expire.** If an assigned issue shows no activity for a while, it's automatically unassigned (the bot's welcome comment says how long), and someone else can claim it.
+- Maintainers may reassign an issue if the claimant stops responding to review.
+
+**Using AI tools**
+AI coding assistants are fine. Please say in the PR description that you used one, and be ready to explain your change and respond to review yourself. A PR whose author can't explain it may be closed.
 
 
 ### Larger Contributions

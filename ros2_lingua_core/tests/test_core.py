@@ -10,6 +10,9 @@ Run with:
 """
 
 import json
+import sys
+from copy import deepcopy
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -434,6 +437,354 @@ class TestGroundingEngine:
         plan = engine.ground("anything")
         assert plan.feasible is False
         assert "JSON" in plan.reason
+
+
+# ------------------------------------------------------------------
+# Plan cache tests
+# ------------------------------------------------------------------
+
+
+@pytest.fixture
+def cache_engine(registry, monkeypatch):
+    clock = SimpleNamespace(now=1000.0)
+    # Cover the old wall clock implementation as well as the monotonic clock.
+    monkeypatch.setattr("ros2_lingua_core.grounding.time.time", lambda: clock.now)
+    monkeypatch.setattr("ros2_lingua_core.grounding.time.monotonic", lambda: clock.now)
+    response = json.dumps(
+        {
+            "feasible": True,
+            "steps": [
+                {
+                    "capability_name": "navigate_to_location",
+                    "parameters": {"location_name": "table", "route": {"points": [1, 2]}},
+                    "rationale": "Go to table",
+                }
+            ],
+        }
+    )
+
+    def make_engine(**kwargs):
+        backend = Mock(spec=["complete"])
+        backend.complete.return_value = response
+        options = {"cache_ttl_sec": 10.0, "max_retries": 1}
+        options.update(kwargs)
+        engine = GroundingEngine(registry, backend, **options)
+        return engine, backend, clock
+
+    return make_engine
+
+
+class TestPlanCache:
+    def test_uncopyable_plan_is_returned_without_caching(self, cache_engine, basic_capability):
+        # JSON and the prompt accept this depth, but recursive deepcopy exceeds
+        # the Python recursion limit. The cache must not turn success into failure.
+        value = []
+        for _ in range(sys.getrecursionlimit() // 2 + 50):
+            value = [value]
+        basic_capability.parameters.append(
+            CapabilityParameter("fallback", "object", "Fallback", required=False, default=value)
+        )
+        engine, backend, _ = cache_engine()
+
+        assert engine.ground("go to the table").feasible
+        assert engine.ground("go to the table").feasible
+        assert backend.complete.call_count == 2
+        assert not engine._plan_cache
+
+    def test_failed_cache_hit_copy_regenerates_plan(self, cache_engine, monkeypatch):
+        engine, backend, _ = cache_engine()
+        expected = engine.ground("go to the table")
+        copier = Mock(side_effect=[TypeError("cannot copy cached plan"), deepcopy(expected)])
+        monkeypatch.setattr("ros2_lingua_core.grounding.deepcopy", copier)
+
+        assert engine.ground("go to the table") == expected
+        assert backend.complete.call_count == 2
+        assert len(engine._plan_cache) == 1
+
+        monkeypatch.setattr("ros2_lingua_core.grounding.deepcopy", deepcopy)
+        assert engine.ground("go to the table") == expected
+        assert backend.complete.call_count == 2
+
+    @pytest.mark.parametrize("field", ["metadata", "default"])
+    @pytest.mark.parametrize("value_kind", ["path", "mixed-keys", "cycle"])
+    def test_unserializable_definitions_bypass_cache(
+        self, cache_engine, basic_capability, field, value_kind
+    ):
+        parameter = CapabilityParameter("fallback", "object", "Fallback", required=False)
+        basic_capability.parameters.append(parameter)
+        engine, backend, _ = cache_engine()
+        expected = engine.ground("go to the table")
+        assert expected.feasible
+
+        if value_kind == "path":
+            value = Path("maps/floor.yaml")
+        elif value_kind == "mixed-keys":
+            value = {1: 0.5, "default": 0.2}
+        else:
+            value = []
+            value.append(value)
+
+        if field == "metadata":
+            basic_capability.metadata = {"configuration": value}
+        else:
+            parameter.default = value
+
+        for _ in range(2):
+            plan = engine.ground("go to the table")
+            assert plan.feasible
+            if field == "default":
+                fallback = plan.steps[-1].parameters["fallback"]
+                if value_kind == "cycle":
+                    assert fallback[0] is fallback
+                else:
+                    assert fallback == value
+        assert backend.complete.call_count == 3
+        assert len(engine._plan_cache) == 1
+
+        # Bypassing an unsafe key must neither reuse nor overwrite an existing entry.
+        basic_capability.metadata = {}
+        parameter.default = None
+        assert engine.ground("go to the table") == expected
+        assert backend.complete.call_count == 3
+
+    def test_identical_request_uses_cached_chained_plan(self, cache_engine):
+        engine, backend, _ = cache_engine()
+        first = engine.ground("go to the table")
+        second = engine.ground("go to the table")
+
+        assert first.feasible
+        assert [step.capability_name for step in first.steps] == [
+            "stabilize_robot",
+            "navigate_to_location",
+        ]
+        assert second == first
+        assert second is not first
+        assert backend.complete.call_count == 1
+
+    @pytest.mark.parametrize(
+        "response",
+        [
+            pytest.param("not JSON", id="invalid-json"),
+            pytest.param('{"feasible": false, "reason": "try again"}', id="infeasible"),
+            pytest.param('{"steps": {}}', id="invalid-shape"),
+            pytest.param('{"steps": [{"capability_name": "missing"}]}', id="unknown-capability"),
+            pytest.param(
+                '{"steps": [{"capability_name": "navigate_to_location", "parameters": {}}]}',
+                id="invalid-parameters",
+            ),
+            pytest.param('{"steps": [{"capability_name": "blocked"}]}', id="chaining-failure"),
+        ],
+    )
+    def test_failed_plan_is_retried_on_next_request(self, cache_engine, registry, response):
+        registry.register(
+            Capability(
+                name="blocked",
+                description="Has an unavailable prerequisite",
+                ros_action="robot/blocked",
+                preconditions=["unavailable"],
+            )
+        )
+        engine, backend, _ = cache_engine()
+        backend.complete.side_effect = [response, backend.complete.return_value]
+
+        assert not engine.ground("go to the table").feasible
+        assert engine.ground("go to the table").feasible
+        assert engine.ground("go to the table").feasible
+        assert backend.complete.call_count == 2
+
+    def test_backend_error_is_retried_on_next_request(self, cache_engine):
+        from ros2_lingua_core import LLMTimeoutError
+
+        engine, backend, _ = cache_engine()
+        backend.complete.side_effect = [LLMTimeoutError("timed out"), backend.complete.return_value]
+
+        assert not engine.ground("go to the table").feasible
+        assert engine.ground("go to the table").feasible
+        assert engine.ground("go to the table").feasible
+        assert backend.complete.call_count == 2
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("description", "Navigate carefully to a named location"),
+            ("ros_action", "robot/new_navigate"),
+            ("ros_service", "robot/navigate_service"),
+            ("preconditions", ["robot_is_balanced", "door_open"]),
+            ("postconditions", ["robot_at_table"]),
+            ("metadata", {"limits": {"speed": 0.5}}),
+            ("tags", ["indoor"]),
+        ],
+    )
+    def test_capability_definition_change_misses_cache(
+        self, cache_engine, registry, basic_capability, field, value
+    ):
+        registry.set_state("door_open")
+        engine, backend, _ = cache_engine()
+        assert engine.ground("go to the table").feasible
+
+        updated = deepcopy(basic_capability)
+        setattr(updated, field, value)
+        if field == "ros_service":
+            updated.ros_action = None
+        registry.update(updated)
+
+        assert engine.ground("go to the table").feasible
+        assert backend.complete.call_count == 2
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("name", "destination"),
+            ("type", "int"),
+            ("description", "Destination name or number"),
+            ("required", False),
+            ("default", "door"),
+        ],
+    )
+    def test_parameter_definition_change_misses_cache(
+        self, cache_engine, basic_capability, field, value
+    ):
+        engine, backend, _ = cache_engine()
+        assert engine.ground("go to the table").feasible
+
+        # In-place changes must also be detected, without registry.update().
+        setattr(basic_capability.parameters[0], field, value)
+        engine.ground("go to the table")
+        assert backend.complete.call_count == 2
+
+    def test_filtered_out_capability_change_misses_cache(self, cache_engine, stabilize_capability):
+        engine, backend, _ = cache_engine()
+        assert engine.ground("go to the table", tag_filter=["locomotion"]).feasible
+        stabilize_capability.description = "Balance carefully before navigating"
+        assert engine.ground("go to the table", tag_filter=["locomotion"]).feasible
+        assert backend.complete.call_count == 2
+
+    def test_state_change_recomputes_prerequisites(self, cache_engine, registry):
+        engine, backend, _ = cache_engine()
+        assert len(engine.ground("go to the table").steps) == 2
+        registry.set_state("robot_is_balanced")
+        assert len(engine.ground("go to the table").steps) == 1
+        assert backend.complete.call_count == 2
+
+    @pytest.mark.parametrize(
+        ("first_filter", "second_filter"),
+        [(None, []), (None, ["locomotion"]), (["locomotion"], ["balance"])],
+    )
+    def test_tag_filter_change_misses_cache(self, cache_engine, first_filter, second_filter):
+        engine, backend, _ = cache_engine()
+        engine.ground("go to the table", tag_filter=first_filter)
+        engine.ground("go to the table", tag_filter=second_filter)
+        engine.ground("go to the table", tag_filter=second_filter)
+        assert backend.complete.call_count == 2
+        first_prompt = backend.complete.call_args_list[0].args[0][0]["content"]
+        second_prompt = backend.complete.call_args_list[1].args[0][0]["content"]
+        assert first_prompt != second_prompt
+
+    def test_mutating_filter_list_misses_cache(self, cache_engine):
+        engine, backend, _ = cache_engine()
+        tags = ["locomotion"]
+        engine.ground("go to the table", tag_filter=tags)
+        tags[:] = ["balance"]
+        engine.ground("go to the table", tag_filter=tags)
+        assert backend.complete.call_count == 2
+
+    @pytest.mark.parametrize("mutate_cache_hit", [False, True], ids=["first-result", "cache-hit"])
+    def test_returned_plan_mutations_do_not_change_cache(self, cache_engine, mutate_cache_hit):
+        engine, backend, _ = cache_engine()
+        result = engine.ground("go to the table")
+        expected = deepcopy(result)
+        if mutate_cache_hit:
+            result = engine.ground("go to the table")
+
+        result.original_instruction = "changed"
+        result.feasible = False
+        result.reason = "changed"
+        result.steps[-1].parameters["route"]["points"].append(3)
+        result.steps[-1].rationale = "changed"
+        result.steps[-1].capability_name = "changed"
+        result.steps.pop(0)
+
+        assert engine.ground("go to the table") == expected
+        assert backend.complete.call_count == 1
+
+    def test_ttl_expires_from_insertion_not_last_hit(self, cache_engine):
+        engine, backend, clock = cache_engine()
+        engine.ground("go to the table")
+        clock.now += 9
+        engine.ground("go to the table")
+        assert backend.complete.call_count == 1
+
+        clock.now += 1
+        engine.ground("go to the table")
+        assert backend.complete.call_count == 2
+        clock.now += 9
+        engine.ground("go to the table")
+        assert backend.complete.call_count == 2
+
+    def test_ttl_uses_completion_time(self, cache_engine):
+        engine, backend, clock = cache_engine()
+
+        def slow_response(messages):
+            clock.now += 20
+            return backend.complete.return_value
+
+        backend.complete.side_effect = slow_response
+        engine.ground("go to the table")
+        clock.now += 9
+        engine.ground("go to the table")
+        assert backend.complete.call_count == 1
+
+    def test_ttl_is_unaffected_by_wall_clock_changes(self, cache_engine, monkeypatch):
+        engine, backend, clock = cache_engine()
+        engine.ground("go to the table")
+        monkeypatch.setattr("ros2_lingua_core.grounding.time.time", lambda: 0.0)
+        clock.now += 11
+        engine.ground("go to the table")
+        assert backend.complete.call_count == 2
+
+    @pytest.mark.parametrize("ttl", [0, -1])
+    def test_nonpositive_ttl_disables_cache(self, cache_engine, ttl):
+        engine, backend, _ = cache_engine(cache_ttl_sec=ttl)
+        engine.ground("go to the table")
+        engine.ground("go to the table")
+        assert backend.complete.call_count == 2
+        assert not engine._plan_cache
+
+    def test_lru_hit_protects_entry_from_eviction(self, cache_engine):
+        engine, backend, _ = cache_engine(cache_max_size=2)
+        for instruction in ["A", "B", "A", "C", "A", "C"]:
+            assert engine.ground(instruction).feasible
+        assert backend.complete.call_count == 3
+        assert len(engine._plan_cache) == 2
+
+        engine.ground("B")
+        assert backend.complete.call_count == 4
+        assert len(engine._plan_cache) == 2
+
+    def test_default_cache_size_is_bounded(self, cache_engine):
+        engine, backend, _ = cache_engine()
+        for index in range(129):
+            assert engine.ground(f"request {index}").feasible
+        assert len(engine._plan_cache) == 128
+        engine.ground("request 0")
+        assert backend.complete.call_count == 130
+
+    @pytest.mark.parametrize("size", [0, -1])
+    def test_nonpositive_size_disables_cache(self, cache_engine, size):
+        engine, backend, _ = cache_engine(cache_max_size=size)
+        engine.ground("go to the table")
+        engine.ground("go to the table")
+        assert backend.complete.call_count == 2
+        assert not engine._plan_cache
+
+    def test_failure_does_not_evict_successful_plan(self, cache_engine):
+        engine, backend, _ = cache_engine(cache_max_size=1)
+        engine.ground("go to the table")
+        backend.complete.return_value = '{"feasible": false}'
+        assert not engine.ground("impossible").feasible
+        assert engine.ground("go to the table").feasible
+        assert backend.complete.call_count == 2
+        assert len(engine._plan_cache) == 1
 
 
 # ------------------------------------------------------------------

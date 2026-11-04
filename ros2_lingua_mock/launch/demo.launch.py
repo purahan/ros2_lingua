@@ -54,6 +54,12 @@ def generate_launch_description():
         description="HTTP port for the dashboard server",
     )
 
+    allow_demo_mode_arg = DeclareLaunchArgument(
+        "allow_demo_mode",
+        default_value="False",
+        description="Simulate steps whose server is unavailable instead of failing them",
+    )
+
     llm_backend = LaunchConfiguration("llm_backend")
     llm_model = LaunchConfiguration("llm_model")
     robot_namespace = LaunchConfiguration("robot_namespace")
@@ -79,6 +85,7 @@ def generate_launch_description():
         executable="dispatcher_node",
         name="lingua_dispatcher_node",
         namespace=robot_namespace,
+        parameters=[{"allow_demo_mode": LaunchConfiguration("allow_demo_mode")}],
         output="screen",
     )
 
@@ -159,6 +166,7 @@ def generate_launch_description():
         llm_backend_arg,
         llm_model_arg,
         dashboard_port_arg,
+        allow_demo_mode_arg,
         LogInfo(msg="NOTE: For OpenAI/Anthropic, export LINGUA_LLM_API_KEY before launching."),
         LogInfo(msg="Starting ros2_lingua demo system..."),
         grounding_node,

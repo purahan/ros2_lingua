@@ -42,6 +42,13 @@ def generate_launch_description():
         description="Time to live (in seconds) for the plan cache. 0.0 disables caching.",
     )
 
+    allow_demo_mode_arg = DeclareLaunchArgument(
+        "allow_demo_mode",
+        default_value="False",
+        description="Simulate steps whose server is unavailable instead of failing them. "
+                    "Never enable on a real robot.",
+    )
+
     # Nodes
     grounding_node = Node(
         package="ros2_lingua",
@@ -66,6 +73,7 @@ def generate_launch_description():
         name="lingua_dispatcher_node",
         namespace=LaunchConfiguration("robot_namespace"),
         output="screen",
+        parameters=[{"allow_demo_mode": LaunchConfiguration("allow_demo_mode")}],
     )
 
     return LaunchDescription([
@@ -75,6 +83,7 @@ def generate_launch_description():
         ollama_host_arg,
         auto_chain_arg,
         cache_ttl_sec_arg,
+        allow_demo_mode_arg,
         grounding_node,
         dispatcher_node,
     ])

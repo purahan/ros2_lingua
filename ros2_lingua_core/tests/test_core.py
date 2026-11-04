@@ -610,7 +610,7 @@ class TestParameterValidation:
         from ros2_lingua_core import ParameterValidationError, ParameterValidator
 
         cap = self._make_cap([CapabilityParameter("count", "int", "count")])
-        for val in [float("inf"), float("-inf"), float("nan")]:
+        for val in [float("inf"), float("-inf"), float("nan"), "inf", "-inf", "1e400"]:
             with pytest.raises(ParameterValidationError):
                 ParameterValidator().validate(cap, {"count": val})
 

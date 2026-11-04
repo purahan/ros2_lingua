@@ -243,15 +243,19 @@ class ParameterValidator:
         if isinstance(value, str):
             try:
                 f = float(value)
-                if f == int(f):
-                    return int(f), None
-                return None, (
-                    f"expected int, got str ('{value}') — fractional values are not allowed"
-                )
             except ValueError:
                 return None, (
                     f"expected int, got str ('{value}'). Examples of valid values: 1, 5, 10"
                 )
+            if not math.isfinite(f):
+                return None, (
+                    f"expected int, got str ('{value}') — non-finite values are not allowed"
+                )
+            if f == int(f):
+                return int(f), None
+            return None, (
+                f"expected int, got str ('{value}') — fractional values are not allowed"
+            )
         return None, (f"expected int, got {type(value).__name__} ('{value}')")
 
     def _to_bool(self, value, param_def):

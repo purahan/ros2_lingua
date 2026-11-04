@@ -335,12 +335,35 @@ class GroundingEngine:
                 reason=f"LLM returned invalid JSON: {e}. Raw response: {raw[:200]}",
             )
 
+        def invalid_response(message: str) -> ActionPlan:
+            return ActionPlan(
+                steps=[],
+                original_instruction=instruction,
+                feasible=False,
+                reason=f"LLM returned invalid response: {message}",
+            )
+
+        if not isinstance(data, dict):
+            return invalid_response("the top-level JSON value must be an object")
+
         feasible = data.get("feasible", True)
+        if type(feasible) is not bool:
+            return invalid_response("'feasible' must be a boolean")
+
         reason = data.get("reason", "")
+        response_steps = data.get("steps", [])
+        if not isinstance(response_steps, list):
+            return invalid_response("'steps' must be a list")
+
         steps = []
 
-        for step_data in data.get("steps", []):
+        for index, step_data in enumerate(response_steps):
+            if not isinstance(step_data, dict):
+                return invalid_response(f"steps[{index}] must be an object")
             cap_name = step_data.get("capability_name", "")
+            parameters = step_data.get("parameters", {})
+            if not isinstance(parameters, dict):
+                return invalid_response(f"steps[{index}].parameters must be an object")
             # Validate that the capability actually exists
             if self._registry.get(cap_name) is None:
                 return ActionPlan(
@@ -355,7 +378,7 @@ class GroundingEngine:
             steps.append(
                 ActionStep(
                     capability_name=cap_name,
-                    parameters=step_data.get("parameters", {}),
+                    parameters=parameters,
                     rationale=step_data.get("rationale", ""),
                 )
             )

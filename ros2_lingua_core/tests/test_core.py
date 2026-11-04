@@ -405,6 +405,28 @@ class TestGroundingEngine:
         assert plan.feasible is False
         assert "hallucination" in plan.reason.lower() or "unknown" in plan.reason.lower()
 
+    @pytest.mark.parametrize(
+        ("response", "expected_reason"),
+        [
+            ('{"feasible": "false", "steps": []}', "'feasible' must be a boolean"),
+            ('{"feasible": 1, "steps": []}', "'feasible' must be a boolean"),
+            ('{"steps": {}}', "'steps' must be a list"),
+            ('{"steps": [null]}', "steps[0] must be an object"),
+            (
+                '{"steps": [{"capability_name": "navigate_to_location", "parameters": []}]}',
+                "steps[0].parameters must be an object",
+            ),
+            ("[]", "top-level JSON value must be an object"),
+        ],
+    )
+    def test_malformed_response_shapes_are_infeasible(self, registry, response, expected_reason):
+        engine = GroundingEngine(registry, MockBackend(response), auto_chain=False)
+        plan = engine.ground("anything")
+
+        assert plan.feasible is False
+        assert plan.steps == []
+        assert expected_reason in plan.reason
+
     def test_invalid_json_from_llm(self, registry):
         engine = GroundingEngine(registry, MockBackend("this is not json"))
         plan = engine.ground("anything")

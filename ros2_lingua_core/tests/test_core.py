@@ -150,6 +150,66 @@ class TestCapabilityRegistry:
         assert "navigate_to_location" in context
         assert "stabilize_robot" in context
 
+    def test_concurrent_reads_and_writes(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        from time import sleep
+
+        registry = CapabilityRegistry()
+        for index in range(64):
+            registry.update(
+                Capability(
+                    name=f"cap_{index}",
+                    description="concurrent capability",
+                    ros_action="robot/action",
+                    tags=["concurrency"],
+                )
+            )
+        registry.update(Capability(name="goal", description="goal", ros_action="robot/goal"))
+
+        start = Barrier(4)
+
+        def writer():
+            start.wait(timeout=5)
+            for index in range(1000):
+                name = f"cap_{index % 64}"
+                registry.update(
+                    Capability(
+                        name=name,
+                        description="updated capability",
+                        ros_action="robot/action",
+                        tags=["concurrency"],
+                    )
+                )
+                if index % 2:
+                    registry.unregister(name)
+                registry.set_state(f"state_{index % 8}")
+                if index % 3 == 0:
+                    registry.clear_state(f"state_{index % 8}")
+                if index % 10 == 0:
+                    sleep(0)
+
+        def reader():
+            start.wait(timeout=5)
+            for index in range(500):
+                registry.get_all()
+                registry.names()
+                registry.get_by_tag("concurrency")
+                registry.get_by_tags(["concurrency"])
+                registry.get_all_tags()
+                registry.get_untagged()
+                registry.get_state()
+                registry.is_satisfied(["state_1"])
+                registry.to_llm_context(tags=["concurrency"])
+                registry.resolve_chain("goal")
+                if index % 10 == 0:
+                    sleep(0)
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            tasks = [executor.submit(writer)] + [executor.submit(reader) for _ in range(3)]
+            for task in tasks:
+                task.result(timeout=15)
+
 
 # ------------------------------------------------------------------
 # Backward chaining tests

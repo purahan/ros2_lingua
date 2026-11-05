@@ -14,20 +14,23 @@ the dispatcher node can pick it up and execute it.
 
 import json
 import os
+from contextlib import suppress
+
 import rclpy
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from std_msgs.msg import String, Empty
-from std_srvs.srv import Empty as EmptySrv
+from std_msgs.msg import Empty, String
 
 from ros2_lingua_core import (
     Capability,
     CapabilityRegistry,
     GroundingEngine,
 )
-from ros2_lingua_core.backends import OpenAIBackend, AnthropicBackend, OllamaBackend
+from ros2_lingua_core.backends import AnthropicBackend, OllamaBackend, OpenAIBackend
 
 # Custom service types (defined in ros2_lingua_interfaces)
-from ros2_lingua_interfaces.srv import RegisterCapability, GroundInstruction, UpdateState
+from ros2_lingua_interfaces.srv import GroundInstruction, RegisterCapability, UpdateState
 
 
 class GroundingNode(Node):
@@ -45,7 +48,7 @@ class GroundingNode(Node):
         super().__init__("lingua_grounding_node")
 
         # --- Parameters ---
-        self.declare_parameter("llm_backend", "openai")     # openai | anthropic | ollama | mock
+        self.declare_parameter("llm_backend", "openai")  # openai | anthropic | ollama | mock
         self.declare_parameter("llm_model", "gpt-4o")
         self.declare_parameter("ollama_host", "http://localhost:11434")
         self.declare_parameter("auto_chain", True)
@@ -54,22 +57,27 @@ class GroundingNode(Node):
         # --- Core objects ---
         self._registry = CapabilityRegistry()
         self._engine = self._build_engine()
+        self._registry_callback_group = MutuallyExclusiveCallbackGroup()
+        self._ground_callback_group = MutuallyExclusiveCallbackGroup()
 
         # --- Services ---
         self._register_srv = self.create_service(
             RegisterCapability,
             "lingua/register_capability",
             self._handle_register,
+            callback_group=self._registry_callback_group,
         )
         self._ground_srv = self.create_service(
             GroundInstruction,
             "lingua/ground",
             self._handle_ground,
+            callback_group=self._ground_callback_group,
         )
         self._state_srv = self.create_service(
             UpdateState,
             "lingua/update_state",
             self._handle_update_state,
+            callback_group=self._registry_callback_group,
         )
 
         # --- Publishers ---
@@ -116,6 +124,7 @@ class GroundingNode(Node):
             backend = OllamaBackend(model=model, host=host)
         elif backend_name == "mock":
             from ros2_lingua_core.backends import MockBackend
+
             backend = MockBackend()
         else:
             raise ValueError(
@@ -163,13 +172,9 @@ class GroundingNode(Node):
                 msg = String()
                 msg.data = plan_json
                 self._plan_pub.publish(msg)
-                self.get_logger().info(
-                    f"Plan generated: {len(plan.steps)} step(s)."
-                )
+                self.get_logger().info(f"Plan generated: {len(plan.steps)} step(s).")
             else:
-                self.get_logger().warn(
-                    f"Instruction not feasible: {plan.reason}"
-                )
+                self.get_logger().warn(f"Instruction not feasible: {plan.reason}")
 
         except Exception as e:
             self.get_logger().error(f"Grounding error: {e}")
@@ -192,9 +197,7 @@ class GroundingNode(Node):
                 self._registry.clear_state(token)
 
             response.success = True
-            response.message = (
-                f"State updated. Set: {set_tokens}, Cleared: {clear_tokens}"
-            )
+            response.message = f"State updated. Set: {set_tokens}, Cleared: {clear_tokens}"
         except Exception as e:
             response.success = False
             response.message = str(e)
@@ -211,16 +214,17 @@ class GroundingNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = GroundingNode()
+    executor = MultiThreadedExecutor(num_threads=2)
     try:
-        rclpy.spin(node)
+        executor.add_node(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
+        executor.shutdown()
         node.destroy_node()
-        try:
+        with suppress(Exception):
             rclpy.shutdown()
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":

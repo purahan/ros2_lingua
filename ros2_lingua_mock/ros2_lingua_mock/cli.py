@@ -12,10 +12,12 @@ Prints the resulting plan in a human-readable format and shows
 live execution status as the dispatcher works through the steps.
 """
 
-import sys
 import argparse
 import json
+import math
+import sys
 import time
+
 import rclpy
 import rclpy.utilities
 from rclpy.node import Node
@@ -23,19 +25,37 @@ from std_msgs.msg import String
 
 from ros2_lingua_interfaces.srv import GroundInstruction
 
-
 BANNER = """
 ╔══════════════════════════════════════════╗
 ║         ros2_lingua  —  CLI Tool         ║
 ╚══════════════════════════════════════════╝
 """
 
+DEFAULT_GROUNDING_TIMEOUT = 30.0
+
+
+def _positive_timeout(value: str) -> float:
+    try:
+        timeout = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("timeout must be a positive number of seconds") from error
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise argparse.ArgumentTypeError("timeout must be a positive number of seconds")
+    return timeout
+
 
 class LinguaCLI(Node):
-
-    def __init__(self, instruction: str, namespace: str = ""):
+    def __init__(
+        self,
+        instruction: str,
+        namespace: str = "",
+        grounding_timeout: float = DEFAULT_GROUNDING_TIMEOUT,
+    ) -> None:
         super().__init__("lingua_cli")
+        if not math.isfinite(grounding_timeout) or grounding_timeout <= 0:
+            raise ValueError("grounding_timeout must be a positive number of seconds")
         self._instruction = instruction
+        self._grounding_timeout = grounding_timeout
         self._done = False
 
         namespace = namespace.strip("/")
@@ -47,7 +67,7 @@ class LinguaCLI(Node):
             String, f"{prefix}/lingua/execution_status", self._handle_status, 10
         )
 
-    def run(self):
+    def run(self) -> None:
         print(BANNER)
         print(f'📢  Instruction: "{self._instruction}"\n')
 
@@ -63,7 +83,7 @@ class LinguaCLI(Node):
         print("⏳  Sending to grounding engine...")
         future = self._client.call_async(request)
 
-        rclpy.spin_until_future_complete(self, future, timeout_sec=30.0)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=self._grounding_timeout)
 
         if future.result() is None:
             print("❌  Grounding timed out. Is the LLM backend running?")
@@ -101,7 +121,7 @@ class LinguaCLI(Node):
             rclpy.spin_once(self, timeout_sec=0.5)
 
     def _handle_status(self, msg: String):
-        status = msg.data if hasattr(msg, 'data') else str(msg)
+        status = msg.data if hasattr(msg, "data") else str(msg)
         if "COMPLETED" in status:
             print("\n✅  Execution complete.\n")
             self._done = True
@@ -109,7 +129,7 @@ class LinguaCLI(Node):
             print(f"\n❌  Execution failed: {status}\n")
             self._done = True
         elif "STEP_COMPLETE" in status:
-            print(f"   ✓  Step done")
+            print("   ✓  Step done")
 
 
 class CapabilitiesListener(Node):
@@ -161,14 +181,14 @@ def _print_capabilities(caps: list, tag: str = None) -> None:
         print()
 
 
-def main():
+def main() -> None:
     rclpy.init()
 
     remaining_args = rclpy.utilities.remove_ros_args(sys.argv)
 
     parser = argparse.ArgumentParser(
         description="Send a natural language instruction to the ros2_lingua "
-                     "grounding engine, or list registered capabilities."
+        "grounding engine, or list registered capabilities."
     )
     subparsers = parser.add_subparsers(dest="command")
 
@@ -180,6 +200,13 @@ def main():
         default="",
         metavar="NS",
         help="Robot namespace to prefix service and topic names (e.g. robot_1)",
+    )
+    ground_parser.add_argument(
+        "--grounding-timeout",
+        type=_positive_timeout,
+        default=DEFAULT_GROUNDING_TIMEOUT,
+        metavar="SECONDS",
+        help="Maximum time to wait for the grounding service (default: 30 seconds)",
     )
     ground_parser.add_argument(
         "instruction",
@@ -226,7 +253,11 @@ def main():
 
     instruction = " ".join(args.instruction)
 
-    cli = LinguaCLI(instruction, namespace=args.namespace)
+    cli = LinguaCLI(
+        instruction,
+        namespace=args.namespace,
+        grounding_timeout=args.grounding_timeout,
+    )
     try:
         cli.run()
     except KeyboardInterrupt:

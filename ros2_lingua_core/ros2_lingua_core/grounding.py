@@ -19,6 +19,8 @@ import hashlib
 import json
 import logging
 import time
+from collections import OrderedDict
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -168,6 +170,7 @@ class GroundingEngine:
         validate_params: bool = True,
         strict_params: bool = False,
         cache_ttl_sec: float = 0.0,
+        cache_max_size: int = 128,
     ):
         """
         Args:
@@ -182,8 +185,14 @@ class GroundingEngine:
                              Catches type errors (e.g. speed="fast") before dispatch.
             strict_params:   If True, reject unknown parameters in LLM responses.
                              If False (default), pass unknown params through unchanged.
-            cache_ttl_sec:   How long to cache identical plans in seconds.
+            cache_ttl_sec:   How long to cache successful plans after completion, in seconds.
+                             Cache hits do not extend the TTL. Nonpositive values disable
+                             caching. Unserializable definitions and plans that cannot
+                             be deep-copied bypass the cache.
                              Default 0.0 (disabled).
+            cache_max_size: Maximum number of cached plans, evicting the least recently
+                             used entry when full. Nonpositive values disable caching.
+                             Default 128.
         """
         self._registry = registry
         self._backend = backend
@@ -194,10 +203,11 @@ class GroundingEngine:
         self._validate_params = validate_params
         self._strict_params = strict_params
         self._cache_ttl_sec = cache_ttl_sec
+        self._cache_max_size = cache_max_size
         self._validator = ParameterValidator() if validate_params else None
 
         # Cache: (instruction_hash, registry_hash) -> (ActionPlan, timestamp)
-        self._plan_cache: dict[tuple[str, str], tuple[ActionPlan, float]] = {}
+        self._plan_cache: OrderedDict[tuple[str, str], tuple[ActionPlan, float]] = OrderedDict()
 
     def ground(self, instruction: str, tag_filter: list[str] | None = None) -> ActionPlan:
         """
@@ -222,23 +232,39 @@ class GroundingEngine:
                 reason="No capabilities are registered. Nodes must register before grounding.",
             )
 
-        # Check cache if TTL is enabled
-        cache_key = None  # initialized here to avoid NameError in the retry loop below
-        if self._cache_ttl_sec > 0:
+        # Check cache if both TTL and capacity are enabled.
+        cache_key = None
+        if self._cache_ttl_sec > 0 and self._cache_max_size > 0:
             instruction_hash = hashlib.md5(instruction.encode()).hexdigest()
-            # Include both capability names and current state in the registry hash
+            # Include all definitions: even filtered-out capabilities can be prerequisites.
+            # Preserve registration order, which determines the first prerequisite producer.
             registry_state = {
-                "caps": sorted(self._registry.names()),
+                "caps": [cap.to_dict() for cap in self._registry.get_all()],
                 "state": sorted(self._registry.get_state()),
+                "tag_filter": tag_filter,
             }
-            registry_hash = hashlib.md5(json.dumps(registry_state).encode()).hexdigest()
-            cache_key = (instruction_hash, registry_hash)
+            try:
+                registry_json = json.dumps(registry_state, sort_keys=True)
+            except (TypeError, ValueError, RecursionError):
+                # Metadata and parameter defaults may contain arbitrary Python values.
+                # An optional cache must not prevent otherwise valid grounding.
+                logger.debug("Skipping plan cache: registry context cannot be serialized.")
+            else:
+                registry_hash = hashlib.md5(registry_json.encode()).hexdigest()
+                cache_key = (instruction_hash, registry_hash)
 
-            if cache_key in self._plan_cache:
+            if cache_key is not None and cache_key in self._plan_cache:
                 cached_plan, timestamp = self._plan_cache[cache_key]
-                if time.time() - timestamp <= self._cache_ttl_sec:
-                    logger.info(f"Cache hit for instruction: '{instruction}'")
-                    return cached_plan
+                if time.monotonic() - timestamp < self._cache_ttl_sec:
+                    try:
+                        plan = deepcopy(cached_plan)
+                    except Exception:
+                        logger.debug("Discarding cached plan: it cannot be copied.")
+                        del self._plan_cache[cache_key]
+                    else:
+                        self._plan_cache.move_to_end(cache_key)
+                        logger.info(f"Cache hit for instruction: '{instruction}'")
+                        return plan
                 else:
                     # Expired
                     del self._plan_cache[cache_key]
@@ -302,8 +328,16 @@ class GroundingEngine:
                 if plan.feasible and self._auto_chain:
                     plan = self._apply_auto_chaining(plan, instruction)
 
-                if cache_key is not None:
-                    self._plan_cache[cache_key] = (plan, time.time())
+                if cache_key is not None and plan.feasible:
+                    try:
+                        cached_plan = deepcopy(plan)
+                    except Exception:
+                        logger.debug("Skipping plan cache: plan cannot be copied.")
+                    else:
+                        self._plan_cache[cache_key] = (cached_plan, time.monotonic())
+                        self._plan_cache.move_to_end(cache_key)
+                        if len(self._plan_cache) > self._cache_max_size:
+                            self._plan_cache.popitem(last=False)
 
                 return plan
             except Exception as e:

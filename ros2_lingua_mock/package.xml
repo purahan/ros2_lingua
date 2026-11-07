@@ -6,7 +6,7 @@
     Mock robot nodes for ros2_lingua — simulates navigation, manipulation,
     balance, and speech for testing and demos without physical hardware.
   </description>
-  <maintainer email="you@example.com">Your Name</maintainer>
+  <maintainer email="gpurahan@gmail.com">purahan</maintainer>
   <license>Apache-2.0</license>
 
   <depend>rclpy</depend>
@@ -18,6 +18,8 @@
   <depend>ros2_lingua</depend>
   <depend>ros2_lingua_core</depend>
   <depend>ros2_lingua_interfaces</depend>
+
+  <exec_depend>rosbridge_server</exec_depend>
 
   <test_depend>python3-pytest</test_depend>
 

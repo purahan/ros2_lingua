@@ -20,6 +20,7 @@
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>ros2_lingua_interfaces</depend>
+  <depend>nlohmann-json-dev</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

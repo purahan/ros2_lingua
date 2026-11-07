@@ -33,7 +33,7 @@
 #include "ros2_lingua_interfaces/srv/update_state.hpp"
 
 #include "ros2_lingua_cpp/capability.hpp"
-#include "ros2_lingua_cpp/json.hpp"
+#include <nlohmann/json.hpp>
 
 namespace lingua {
 

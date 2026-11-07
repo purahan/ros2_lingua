@@ -7,11 +7,15 @@ setup(
     install_requires=["setuptools"],
     tests_require=["pytest"],
     extras_require={
+        "openai": ["openai"],
+        "anthropic": ["anthropic"],
+        "ollama": ["ollama"],
+        "all": ["openai", "anthropic", "ollama"],
         "dev": [
             "pytest>=7.0,<8.1.0",
             "pytest-cov>=4.0",
             "pytest-timeout>=2.0",
-        ]
+        ],
     },
     zip_safe=True,
 )

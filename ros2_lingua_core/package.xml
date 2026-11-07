@@ -6,8 +6,10 @@
     ROS-agnostic core of ros2_lingua: schema, registry, and grounding engine.
     No ROS 2 dependencies — independently testable.
   </description>
-  <maintainer email="you@example.com">Your Name</maintainer>
+  <maintainer email="gpurahan@gmail.com">purahan</maintainer>
   <license>Apache-2.0</license>
+
+  <exec_depend>python3-setuptools</exec_depend>
 
   <test_depend>python3-pytest</test_depend>
 

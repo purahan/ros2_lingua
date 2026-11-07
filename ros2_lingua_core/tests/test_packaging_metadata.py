@@ -20,7 +20,8 @@ def test_python_packages_have_real_maintainer_metadata() -> None:
 
 def test_core_declares_python_build_dependencies() -> None:
     manifest = read_manifest("ros2_lingua_core")
-    assert manifest.findtext("buildtool_depend") == "ament_python"
+    assert manifest.find("buildtool_depend") is None
+    assert manifest.findtext("export/build_type") == "ament_python"
     assert manifest.findtext("exec_depend") == "python3-setuptools"
 
 
@@ -35,9 +36,7 @@ def test_core_exposes_optional_llm_dependencies() -> None:
         and node.func.id == "setup"
     )
     extras_node = next(
-        keyword.value
-        for keyword in setup_call.keywords
-        if keyword.arg == "extras_require"
+        keyword.value for keyword in setup_call.keywords if keyword.arg == "extras_require"
     )
     extras = ast.literal_eval(extras_node)
 
@@ -70,6 +69,4 @@ def test_cpp_uses_system_nlohmann_json() -> None:
 
 def test_mock_package_declares_dashboard_runtime_dependency() -> None:
     manifest = read_manifest("ros2_lingua_mock")
-    assert "rosbridge_server" in {
-        element.text for element in manifest.findall("exec_depend")
-    }
+    assert "rosbridge_server" in {element.text for element in manifest.findall("exec_depend")}

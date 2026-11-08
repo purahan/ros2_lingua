@@ -4,7 +4,7 @@ setup(
     name="ros2_lingua_core",
     version="0.1.0",
     packages=find_packages(),
-    install_requires=["setuptools"],
+    install_requires=["setuptools", "pydantic", "anthropic", "ollama", "openai"],
     tests_require=["pytest"],
     extras_require={
         "dev": [

@@ -14,7 +14,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'rclpy', 'action_msgs', 'std_msgs', 'ros2_lingua_core', 'ros2_lingua_interfaces', 'anthropic', 'ollama', 'openai'],
     tests_require=['pytest'],
     zip_safe=True,
     entry_points={

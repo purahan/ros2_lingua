@@ -3,7 +3,7 @@
   <name>ros2_lingua</name>
   <version>0.1.0</version>
   <description>ROS 2 nodes for the ros2_lingua LLM-to-action bridge</description>
-  <maintainer email="you@example.com">Your Name</maintainer>
+  <maintainer email="gpurahan@gmail.com">purahan</maintainer>
   <license>Apache-2.0</license>
 
   <depend>rclpy</depend>

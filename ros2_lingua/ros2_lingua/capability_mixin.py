@@ -55,13 +55,18 @@ class LinguaMixin:
         self.get_logger().info("[Lingua] Grounding node requested re-registration. Re-registering capabilities...")
         for cap in self._registered_capabilities:
             # Run in a separate thread or timer to avoid blocking the subscription callback
-            # but since we already have retry logic with timeouts, it's safer to avoid blocking.
-            # Using a one-shot timer allows returning immediately.
-            self.create_timer(
-                0.1, 
-                lambda c=cap: self._execute_registration(c, 10.0, 3), 
-                callback_group=rclpy.callback_groups.MutuallyExclusiveCallbackGroup()
+            # Use a one-shot timer: cancel after first execution so we don't
+            // flood the GroundingNode with repeated registration requests.
+            timer = self.create_timer(
+                0.1,
+                lambda c=cap: self._register_one(c),
+                callback_group=rclpy.callback_groups.MutuallyExclusiveCallbackGroup(),
             )
+            timer.cancel()
+
+    def _register_one(self, cap: Capability):
+        """Register a single capability (called once per timer)."""
+        self._execute_registration(cap, 10.0, 3)
 
     def register_lingua_capability(
         self,

@@ -5,7 +5,6 @@ Simulates a text-to-speech (TTS) system.
 
 Advertises capabilities:
   - say      : speaks a message aloud
-  - ask      : asks a question and waits for acknowledgement
 
 In a real robot, this would wrap your TTS engine
 (espeak, Festival, pyttsx3, ElevenLabs, etc.)
@@ -14,15 +13,14 @@ In a real robot, this would wrap your TTS engine
 import time
 import rclpy
 from rclpy.node import Node
-from rclpy.callback_groups import ReentrantCallbackGroup
 from std_msgs.msg import String
-from std_srvs.srv import Trigger
 
 from ros2_lingua.capability_mixin import LinguaMixin
+from ros2_lingua.lingua_action_server import LinguaActionServer
 from ros2_lingua_core import Capability, CapabilityParameter
 
 
-class MockSpeechNode(LinguaMixin, Node):
+class MockSpeechNode(LinguaMixin, LinguaActionServer, Node):
     """
     Simulates TTS by printing messages and waiting a realistic duration
     based on estimated speaking time (roughly 3 words per second).
@@ -31,20 +29,13 @@ class MockSpeechNode(LinguaMixin, Node):
     def __init__(self):
         Node.__init__(self, "mock_speech_node")
         LinguaMixin.__init__(self)
+        LinguaActionServer.__init__(self, ["say"])
 
         self._callback_group = ReentrantCallbackGroup()
 
         # --- Publishers ---
         self._log_pub = self.create_publisher(String, "/mock/robot_log", 10)
         self._speech_pub = self.create_publisher(String, "/mock/speech_output", 10)
-
-        # --- Service for 'say' (using a service since TTS is quick and synchronous) ---
-        self._say_srv = self.create_service(
-            Trigger,
-            "humanoid/tts",
-            self._handle_say,
-            callback_group=self._callback_group,
-        )
 
         # Register capabilities
         self.register_lingua_capability(Capability(
@@ -53,7 +44,7 @@ class MockSpeechNode(LinguaMixin, Node):
                 "Speaks a message aloud using the robot's text-to-speech system. "
                 "Can be used to greet people, report status, or narrate actions."
             ),
-            ros_service="humanoid/tts",
+            ros_action="mock_speech_node/lingua",
             parameters=[
                 CapabilityParameter(
                     name="message",
@@ -71,11 +62,15 @@ class MockSpeechNode(LinguaMixin, Node):
         self._log("MockSpeechNode ready.")
         self.get_logger().info("MockSpeechNode ready.")
 
-    def _handle_say(self, request, response):
-        # In the mock, the message is passed via request.name (Trigger repurpose)
-        # In real usage, use a proper custom service with a 'message' field
-        message = getattr(request, "name", "Hello!")
+    def execute_capability(self, capability_name, parameters, goal_handle):
+        """Execute say capability."""
+        if capability_name == "say":
+            return self._say(parameters, goal_handle)
+        else:
+            return False, f"Unknown capability: {capability_name}", [], []
 
+    def _say(self, parameters, goal_handle):
+        message = parameters.get("message", "Hello!")
         word_count = len(message.split())
         speak_time = max(0.5, word_count / 3.0)
 
@@ -89,9 +84,10 @@ class MockSpeechNode(LinguaMixin, Node):
 
         time.sleep(speak_time)
 
-        response.success = True
-        response.message = f"Said: {message}"
-        return response
+        self._log(f"✅ Said: '{message}'")
+        self.get_logger().info(f"Speech: said '{message}'")
+
+        return True, f"Said: {message}", [], []
 
     def _log(self, message: str):
         msg = String()

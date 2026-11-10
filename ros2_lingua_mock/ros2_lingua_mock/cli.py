@@ -22,8 +22,8 @@ import rclpy
 import rclpy.utilities
 from rclpy.node import Node
 from std_msgs.msg import String
-from ros2_lingua_interfaces.msg import ExecutionStatus
 
+from ros2_lingua_interfaces.msg import ExecutionStatus
 from ros2_lingua_interfaces.srv import GroundInstruction
 
 BANNER = """
@@ -65,7 +65,7 @@ class LinguaCLI(Node):
 
         self._client = self.create_client(GroundInstruction, self._service_name)
         self._status_sub = self.create_subscription(
-            String, f"{prefix}/lingua/execution_status", self._handle_status, 10
+            ExecutionStatus, f"{prefix}/lingua/execution_status", self._handle_status, 10
         )
 
     def run(self) -> None:
@@ -121,16 +121,34 @@ class LinguaCLI(Node):
         while time.time() < timeout and not self._done:
             rclpy.spin_once(self, timeout_sec=0.5)
 
-    def _handle_status(self, msg: String):
-        status = msg.data if hasattr(msg, "data") else str(msg)
-        if "COMPLETED" in status:
-            print("\n✅  Execution complete.\n")
+    def _handle_status(self, msg: ExecutionStatus):
+        status = msg.status
+        step = msg.current_step
+        step_info = f" (step {step})" if step else ""
+        if status == "COMPLETED":
+            print(f"\n✅  Execution complete{step_info}.\n")
             self._done = True
-        elif "FAILED" in status:
-            print(f"\n❌  Execution failed: {status}\n")
+        elif status == "FAILED":
+            print(f"\n❌  Execution failed{step_info}.\n")
             self._done = True
-        elif "STEP_COMPLETE" in status:
-            print("   ✓  Step done")
+        elif status == "STEP_COMPLETE":
+            print(f"   ✓  Step complete{step_info}")
+        elif status == "STARTED":
+            print(f"\n🚀  Execution started{step_info}\n")
+        elif status == "STEP_STARTED":
+            print(f"   ▶  Step started{step_info}")
+        elif status == "STEP_RETRY":
+            print(f"   ↻  Step retry{step_info}")
+        elif status == "REPLANNING":
+            print(f"\n🔄  Replanning{step_info}\n")
+        elif status == "FALLBACK":
+            print(f"\n🔄  Fallback{step_info}\n")
+        elif status == "RECOVERY_FAILED":
+            print(f"\n❌  Recovery failed{step_info}.\n")
+            self._done = True
+        elif status == "CANCELLED":
+            print(f"\n⚠️  Execution cancelled{step_info}.\n")
+            self._done = True
 
 
 class CapabilitiesListener(Node):

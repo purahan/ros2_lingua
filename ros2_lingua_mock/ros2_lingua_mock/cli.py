@@ -22,6 +22,7 @@ import rclpy
 import rclpy.utilities
 from rclpy.node import Node
 from std_msgs.msg import String
+from ros2_lingua_interfaces.msg import ExecutionStatus
 
 from ros2_lingua_interfaces.srv import GroundInstruction
 

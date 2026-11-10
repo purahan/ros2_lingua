@@ -45,7 +45,7 @@ if(BUILD_TESTING)
   target_include_directories(test_capability PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   )
-  target_link_libraries(test_capability PRIVATE
+  target_link_libraries(test_capability
     nlohmann_json::nlohmann_json
   )
   ament_target_dependencies(test_capability
@@ -58,7 +58,7 @@ if(BUILD_TESTING)
   target_include_directories(test_compilation PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   )
-  target_link_libraries(test_compilation PRIVATE
+  target_link_libraries(test_compilation
     nlohmann_json::nlohmann_json
   )
   ament_target_dependencies(test_compilation

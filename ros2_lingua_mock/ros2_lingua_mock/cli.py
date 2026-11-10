@@ -12,7 +12,7 @@ Prints the resulting plan in a human-readable format and shows
 live execution status as the dispatcher works through the steps.
 """
 
-import argparse
+import contextlib
 import json
 import math
 import sys
@@ -21,7 +21,7 @@ import time
 import rclpy
 import rclpy.utilities
 from rclpy.node import Node
-from std_msgs.msg import String
+from ros2_lingua_interfaces.msg import ExecutionStatus
 
 from ros2_lingua_interfaces.srv import GroundInstruction
 
@@ -64,7 +64,10 @@ class LinguaCLI(Node):
 
         self._client = self.create_client(GroundInstruction, self._service_name)
         self._status_sub = self.create_subscription(
-            String, f"{prefix}/lingua/execution_status", self._handle_status, 10
+            ExecutionStatus,
+            f"{prefix}/lingua/execution_status",
+            self._handle_status,
+            10,
         )
 
     def run(self) -> None:
@@ -120,16 +123,35 @@ class LinguaCLI(Node):
         while time.time() < timeout and not self._done:
             rclpy.spin_once(self, timeout_sec=0.5)
 
-    def _handle_status(self, msg: String):
-        status = msg.data if hasattr(msg, "data") else str(msg)
-        if "COMPLETED" in status:
-            print("\n✅  Execution complete.\n")
+    def _handle_status(self, msg: ExecutionStatus):
+        status = msg.status
+        step = msg.current_step
+        instruction = msg.instruction
+
+        if status == "COMPLETED":
+            print(f"\n✅  Execution complete.{f'  Step: {step}' if step else ''}\n")
             self._done = True
-        elif "FAILED" in status:
-            print(f"\n❌  Execution failed: {status}\n")
+        elif status == "STEP_RETRY":
+            print(f"   🔄  Retrying step: {step or 'unknown'}")
+        elif status == "REPLANNING":
+            print(f"   🔄  Replanning...{f'  Step: {step}' if step else ''}")
+        elif status == "FALLBACK":
+            print(f"   ⚠️  Falling back to: {step or 'unknown'}")
+        elif status == "RECOVERY_FAILED":
+            print(f"\n❌  Recovery failed for step: {step or 'unknown'}\n")
             self._done = True
-        elif "STEP_COMPLETE" in status:
-            print("   ✓  Step done")
+        elif status == "CANCELLED":
+            print(f"\n⚠️  Execution cancelled.{f'  Step: {step}' if step else ''}\n")
+            self._done = True
+        elif status == "STEP_STARTED":
+            print(f"   ➤  Starting step: {step or 'unknown'}")
+        elif status == "STEP_COMPLETE":
+            print(f"   ✓  Step complete: {step or 'unknown'}")
+        elif status == "FAILED":
+            print(f"\n❌  Execution failed at step: {step or 'unknown'}\n")
+            self._done = True
+        else:
+            print(f"   ℹ️  Status: {status}{f'  Step: {step}' if step else ''}")
 
 
 class CapabilitiesListener(Node):

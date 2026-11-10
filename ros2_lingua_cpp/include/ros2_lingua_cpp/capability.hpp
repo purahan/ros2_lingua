@@ -14,7 +14,7 @@
 #include <map>
 #include <optional>
 
-#include "ros2_lingua_cpp/json.hpp"
+#include <nlohmann/json.hpp>
 
 namespace lingua {
 

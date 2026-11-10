@@ -3,7 +3,7 @@
 
 #include <gtest/gtest.h>
 #include "ros2_lingua_cpp/capability.hpp"
-#include "ros2_lingua_cpp/json.hpp"
+#include <nlohmann/json.hpp>
 
 TEST(CapabilityTest, BasicToJson) {
   lingua::Capability cap;

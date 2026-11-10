@@ -58,7 +58,7 @@ class LinguaMixin:
             # flood the GroundingNode with repeated registration requests.
             timer = self.create_timer(
                 0.1,
-                lambda c=cap: self._register_one_and_cancel(c, timer),
+                lambda c=cap, t=timer: self._register_one_and_cancel(c, t),
                 callback_group=rclpy.callback_groups.MutuallyExclusiveCallbackGroup(),
             )
 

@@ -218,7 +218,7 @@ class AnthropicBackend:
                 "Install with: pip install anthropic"
             ) from None
         self._anthropic = anthropic
-        self._client = anthropic.Anthropic(api_key=api_key, max_retries=0)
+        self._client = anthropic.Anthropic(api_key=api_key, timeout=timeout_sec, max_retries=0)
         self._model = model
         self._max_tokens = max_tokens
         self._timeout_sec = timeout_sec
@@ -240,6 +240,7 @@ class AnthropicBackend:
                     max_tokens=self._max_tokens,
                     system=system_content,
                     messages=chat_messages,  # type: ignore
+                    temperature=0.0,
                 )
                 return response.content[0].text
             except Exception as e:
@@ -279,6 +280,7 @@ class OllamaBackend:
             raise ImportError(
                 "ollama package is required for OllamaBackend. Install with: pip install ollama"
             ) from None
+        self._client = _ollama.Client(host=host, timeout=timeout_sec)
         self._model = model
         self._host = host
         self._timeout_sec = timeout_sec
@@ -287,7 +289,7 @@ class OllamaBackend:
     def complete(self, messages: list[dict[str, str]]) -> str:
         def _call():
             try:
-                response = self._ollama.chat(
+                response = self._client.chat(
                     model=self._model,
                     messages=messages,
                     options={"temperature": 0.0},

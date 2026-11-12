@@ -1228,6 +1228,49 @@ class TestRobustness:
 
         assert calls == 1
 
+    def test_ollama_uses_client_bound_to_host_and_timeout(self, monkeypatch):
+        from ros2_lingua_core import OllamaBackend, RetryConfig
+
+        client = Mock()
+        client.chat.return_value = {"message": {"content": "ok"}}
+        sdk = SimpleNamespace(Client=Mock(return_value=client), chat=client.chat)
+        monkeypatch.setitem(sys.modules, "ollama", sdk)
+
+        backend = OllamaBackend(
+            model="test-model",
+            host="http://ollama.internal:11434",
+            timeout_sec=12.5,
+            retry=RetryConfig.no_retry(),
+        )
+        messages = [{"role": "user", "content": "hi"}]
+        assert backend.complete(messages) == "ok"
+        sdk.Client.assert_called_once_with(host="http://ollama.internal:11434", timeout=12.5)
+        client.chat.assert_called_once_with(
+            model="test-model", messages=messages, options={"temperature": 0.0}
+        )
+
+    def test_anthropic_passes_timeout_and_temperature(self, monkeypatch):
+        from ros2_lingua_core import AnthropicBackend, RetryConfig
+
+        client = Mock()
+        client.messages.create.return_value = SimpleNamespace(content=[SimpleNamespace(text="ok")])
+        sdk = SimpleNamespace(Anthropic=Mock(return_value=client))
+        monkeypatch.setitem(sys.modules, "anthropic", sdk)
+
+        backend = AnthropicBackend(
+            api_key="test", model="test-model", timeout_sec=9.0, retry=RetryConfig.no_retry()
+        )
+        messages = [{"role": "user", "content": "hi"}]
+        assert backend.complete([{"role": "system", "content": "be brief"}, *messages]) == "ok"
+        sdk.Anthropic.assert_called_once_with(api_key="test", timeout=9.0, max_retries=0)
+        client.messages.create.assert_called_once_with(
+            model="test-model",
+            max_tokens=1024,
+            system="be brief",
+            messages=messages,
+            temperature=0.0,
+        )
+
     def test_ollama_response_errors_use_typed_status_codes(self, monkeypatch):
         import sys
         from types import ModuleType
@@ -1258,7 +1301,7 @@ class TestRobustness:
 
         sdk = ModuleType("ollama")
         sdk.ResponseError = ResponseError
-        sdk.chat = chat
+        sdk.Client = Mock(return_value=SimpleNamespace(chat=chat))
         monkeypatch.setitem(sys.modules, "ollama", sdk)
 
         cases = [

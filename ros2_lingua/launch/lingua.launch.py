@@ -1,8 +1,9 @@
-import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+
 
 def generate_launch_description():
     # Launch Arguments
@@ -20,8 +21,8 @@ def generate_launch_description():
 
     llm_model_arg = DeclareLaunchArgument(
         "llm_model",
-        default_value="gpt-4o",
-        description="Model to use (e.g., 'gpt-4o', 'claude-3-opus', 'llama3')",
+        default_value="",
+        description="LLM model override. Leave empty to use the selected backend's default.",
     )
 
     ollama_host_arg = DeclareLaunchArgument(
@@ -46,7 +47,7 @@ def generate_launch_description():
         "allow_demo_mode",
         default_value="False",
         description="Simulate steps whose server is unavailable instead of failing them. "
-                    "Never enable on a real robot.",
+        "Never enable on a real robot.",
     )
 
     # Nodes
@@ -59,7 +60,7 @@ def generate_launch_description():
         parameters=[
             {
                 "llm_backend": LaunchConfiguration("llm_backend"),
-                "llm_model": LaunchConfiguration("llm_model"),
+                "llm_model": ParameterValue(LaunchConfiguration("llm_model"), value_type=str),
                 "ollama_host": LaunchConfiguration("ollama_host"),
                 "auto_chain": LaunchConfiguration("auto_chain"),
                 "cache_ttl_sec": LaunchConfiguration("cache_ttl_sec"),
@@ -76,14 +77,16 @@ def generate_launch_description():
         parameters=[{"allow_demo_mode": LaunchConfiguration("allow_demo_mode")}],
     )
 
-    return LaunchDescription([
-        robot_namespace_arg,
-        llm_backend_arg,
-        llm_model_arg,
-        ollama_host_arg,
-        auto_chain_arg,
-        cache_ttl_sec_arg,
-        allow_demo_mode_arg,
-        grounding_node,
-        dispatcher_node,
-    ])
+    return LaunchDescription(
+        [
+            robot_namespace_arg,
+            llm_backend_arg,
+            llm_model_arg,
+            ollama_host_arg,
+            auto_chain_arg,
+            cache_ttl_sec_arg,
+            allow_demo_mode_arg,
+            grounding_node,
+            dispatcher_node,
+        ]
+    )

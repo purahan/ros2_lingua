@@ -9,61 +9,48 @@ Advertises the capability:
 Publishes robot balance status to /mock/balance_status so other nodes
 can react to balance state changes.
 
+Serves the generic LinguaAction interface at mock_balance_node/lingua
+(see ros2_lingua.lingua_action_server).
+
 In a real robot, this would wrap your actual balance controller
 (e.g. a whole-body controller, a ZMP controller, etc.)
 """
 
 import time
-import rclpy
-from rclpy.node import Node
-from rclpy.action import ActionServer, CancelResponse, GoalResponse
-from rclpy.callback_groups import ReentrantCallbackGroup
-from std_msgs.msg import String, Bool
 
+import rclpy
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
+from rclpy.node import Node
 from ros2_lingua.capability_mixin import LinguaMixin
+from ros2_lingua.lingua_action_server import LinguaActionServer
+from std_msgs.msg import Bool, String
+
 from ros2_lingua_core import Capability
 
 
-# We use a simple string-based action for the mock.
-# In a real robot this would be a typed action (e.g. your balance controller's action type).
-from example_interfaces.action import Fibonacci as MockAction
-
-
-class MockBalanceNode(LinguaMixin, Node):
+class MockBalanceNode(LinguaMixin, LinguaActionServer, Node):
     """
     Simulates a balance controller.
 
-    On receiving a stabilize action goal:
+    On receiving a stabilize_robot goal:
     - Logs that stabilization is starting
     - Waits a realistic amount of time (simulating balance acquisition)
-    - Marks robot_is_balanced in the lingua state
+    - Returns robot_is_balanced in the result's state_set
     - Publishes balance status
-
-    Also handles balance loss simulation — if the robot starts moving
-    and balance is disrupted, it clears robot_is_balanced automatically.
     """
+
+    CAPABILITIES = ["stabilize_robot"]
 
     def __init__(self):
         Node.__init__(self, "mock_balance_node")
         LinguaMixin.__init__(self)
+        LinguaActionServer.__init__(self, self.CAPABILITIES)
 
-        self._callback_group = ReentrantCallbackGroup()
         self._is_balanced = False
 
         # --- Publishers ---
         self._balance_pub = self.create_publisher(Bool, "/mock/balance_status", 10)
         self._log_pub = self.create_publisher(String, "/mock/robot_log", 10)
-
-        # --- Action server for stabilize ---
-        self._action_server = ActionServer(
-            self,
-            MockAction,
-            "humanoid/stabilize",
-            execute_callback=self._execute_stabilize,
-            goal_callback=self._goal_callback,
-            cancel_callback=self._cancel_callback,
-            callback_group=self._callback_group,
-        )
 
         # Publish balance status at 2Hz
         self._status_timer = self.create_timer(0.5, self._publish_status)
@@ -75,7 +62,7 @@ class MockBalanceNode(LinguaMixin, Node):
                 "Activates the balance controller and stabilizes the robot. "
                 "Must be called before any locomotion or manipulation."
             ),
-            ros_action="humanoid/stabilize",
+            ros_action=f"{self.get_name()}/lingua",
             parameters=[],
             preconditions=[],
             postconditions=["robot_is_balanced"],
@@ -86,15 +73,17 @@ class MockBalanceNode(LinguaMixin, Node):
         self._log("MockBalanceNode ready. Robot starts UNSTABILIZED.")
         self.get_logger().info("MockBalanceNode ready.")
 
-    def _goal_callback(self, goal_request):
-        self.get_logger().info("Balance: received stabilize goal.")
-        return GoalResponse.ACCEPT
+    def lingua_current_state(self):
+        if self._is_balanced:
+            return ["robot_is_balanced"], []
+        return [], []
 
-    def _cancel_callback(self, goal_handle):
-        self.get_logger().info("Balance: stabilize cancelled.")
-        return CancelResponse.ACCEPT
+    async def execute_capability(self, capability_name, parameters, goal_handle):
+        if capability_name == "stabilize_robot":
+            return self._stabilize(goal_handle)
+        return False, f"Unknown capability: {capability_name}", [], []
 
-    def _execute_stabilize(self, goal_handle):
+    def _stabilize(self, goal_handle):
         self.get_logger().info("Balance: starting stabilization sequence...")
         self._log("⚖️  Activating balance controller...")
 
@@ -102,24 +91,22 @@ class MockBalanceNode(LinguaMixin, Node):
         steps = 5
         for i in range(steps):
             if goal_handle.is_cancel_requested:
-                goal_handle.canceled()
-                return MockAction.Result()
+                self._log("❌ Stabilization cancelled.")
+                return False, "Stabilization cancelled", [], []
             time.sleep(0.4)
-            self.get_logger().info(f"Balance: stabilizing... ({i+1}/{steps})")
+            goal_handle.publish_feedback(
+                self._make_feedback("Stabilizing...", (i + 1) / steps)
+            )
+            self.get_logger().info(f"Balance: stabilizing... ({i + 1}/{steps})")
 
         # Mark balanced
         self._is_balanced = True
         self._publish_status()
 
-        # Update lingua state
-        self.update_lingua_state(set_tokens=["robot_is_balanced"])
-
         self._log("✅ Robot stabilized. Balance controller active.")
         self.get_logger().info("Balance: robot is now balanced.")
 
-        goal_handle.succeed()
-        result = MockAction.Result()
-        return result
+        return True, "Robot stabilized", ["robot_is_balanced"], []
 
     def _publish_status(self):
         msg = Bool()
@@ -135,13 +122,17 @@ class MockBalanceNode(LinguaMixin, Node):
 def main(args=None):
     rclpy.init(args=args)
     node = MockBalanceNode()
+    # Multi-threaded so cancel requests are handled while a goal is executing
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
+        executor.spin()
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        executor.shutdown()
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()  # SIGINT may already have shut the context down
 
 
 if __name__ == "__main__":

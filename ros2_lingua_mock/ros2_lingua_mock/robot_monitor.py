@@ -12,6 +12,7 @@ Run it alongside the other nodes:
 """
 
 import rclpy
+from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
 from std_msgs.msg import String, Bool
 
@@ -89,13 +90,16 @@ class RobotMonitor(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = RobotMonitor()
+    executor = SingleThreadedExecutor()
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
+        executor.spin()
+    except (KeyboardInterrupt, ExternalShutdownException):
         print("\n[Monitor] Shutting down.")
     finally:
+        executor.shutdown()
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()  # SIGINT may already have shut the context down
 
 
 if __name__ == "__main__":

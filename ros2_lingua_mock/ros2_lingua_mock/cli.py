@@ -262,12 +262,12 @@ def main() -> None:
                 _print_capabilities(node._capabilities, tag=args.tag)
         finally:
             node.destroy_node()
-            rclpy.shutdown()
+            rclpy.try_shutdown()  # SIGINT may already have shut the context down
         return
 
     if args.command != "ground" or not args.instruction:
         print("Usage: cli ground <instruction>  |  cli list-capabilities [--tag TAG]")
-        rclpy.shutdown()
+        rclpy.try_shutdown()  # SIGINT may already have shut the context down
         return
 
     instruction = " ".join(args.instruction)
@@ -283,7 +283,7 @@ def main() -> None:
         pass
     finally:
         cli.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()  # SIGINT may already have shut the context down
 
 
 if __name__ == "__main__":

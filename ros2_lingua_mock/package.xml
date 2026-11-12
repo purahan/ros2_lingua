@@ -11,8 +11,6 @@
 
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
-  <depend>std_srvs</depend>
-  <depend>example_interfaces</depend>
   <depend>launch</depend>
   <depend>launch_ros</depend>
   <depend>ros2_lingua</depend>

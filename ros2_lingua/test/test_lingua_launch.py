@@ -7,10 +7,8 @@ and that the system comes up and communicates correctly over namespaced topics.
 
 import os
 import unittest
-import time
 
 import launch
-import launch_ros.actions
 import launch_testing
 import launch_testing.actions
 import launch_testing.markers
@@ -18,10 +16,10 @@ import pytest
 from ament_index_python.packages import get_package_share_directory
 
 import rclpy
-from rclpy.node import Node
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 from ros2_lingua_interfaces.srv import RegisterCapability
+from std_srvs.srv import Empty
 
 
 @pytest.mark.launch_test
@@ -64,6 +62,7 @@ class TestLinguaLaunch(unittest.TestCase):
         cls.register_client = cls.node.create_client(
             RegisterCapability, "/test_ns/lingua/register_capability"
         )
+        cls.cancel_client = cls.node.create_client(Empty, "/test_ns/lingua/cancel")
 
     @classmethod
     def tearDownClass(cls):
@@ -74,6 +73,9 @@ class TestLinguaLaunch(unittest.TestCase):
         """Wait for the namespaced services to appear."""
         assert self.register_client.wait_for_service(timeout_sec=10.0), \
             "RegisterCapability service not available under namespace"
+        # Also wait for the dispatcher, so shutdown never interrupts it mid-startup
+        assert self.cancel_client.wait_for_service(timeout_sec=10.0), \
+            "Dispatcher cancel service not available under namespace"
 
 
 @launch_testing.post_shutdown_test()

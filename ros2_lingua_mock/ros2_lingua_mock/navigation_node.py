@@ -7,21 +7,23 @@ Advertises capabilities:
   - navigate_to_location : moves the robot to a named location
   - return_to_home       : returns the robot to its home position
 
+Serves the generic LinguaAction interface at mock_navigation_node/lingua
+(see ros2_lingua.lingua_action_server).
+
 In a real robot, this would wrap nav2, a custom locomotion controller,
 or whatever drives your robot from A to B.
 """
 
 import time
+
 import rclpy
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
-from rclpy.action import ActionServer, CancelResponse, GoalResponse
-from rclpy.callback_groups import ReentrantCallbackGroup
+from ros2_lingua.capability_mixin import LinguaMixin
+from ros2_lingua.lingua_action_server import LinguaActionServer
 from std_msgs.msg import String
 
-from ros2_lingua.capability_mixin import LinguaMixin
 from ros2_lingua_core import Capability, CapabilityParameter
-from example_interfaces.action import Fibonacci as MockAction
-
 
 # Simulated map of named locations and how long it takes to walk there (seconds)
 LOCATION_WALK_TIMES = {
@@ -37,45 +39,27 @@ LOCATION_WALK_TIMES = {
 DEFAULT_WALK_TIME = 4.0   # for locations not in the map
 
 
-class MockNavigationNode(LinguaMixin, Node):
+class MockNavigationNode(LinguaMixin, LinguaActionServer, Node):
     """
     Simulates navigation by waiting a realistic amount of time
     and then reporting arrival.
 
-    Tracks current location and updates lingua state accordingly.
+    Tracks the current location and returns robot_at_location in the result.
     """
+
+    CAPABILITIES = ["navigate_to_location", "return_to_home"]
 
     def __init__(self):
         Node.__init__(self, "mock_navigation_node")
         LinguaMixin.__init__(self)
+        LinguaActionServer.__init__(self, self.CAPABILITIES)
 
-        self._callback_group = ReentrantCallbackGroup()
         self._current_location = "home"
+        self._arrived = False   # True once a navigation has finished at a location
 
         # --- Publishers ---
         self._log_pub = self.create_publisher(String, "/mock/robot_log", 10)
         self._location_pub = self.create_publisher(String, "/mock/current_location", 10)
-
-        # --- Action server ---
-        self._nav_server = ActionServer(
-            self,
-            MockAction,
-            "humanoid/navigate",
-            execute_callback=self._execute_navigate,
-            goal_callback=self._goal_callback,
-            cancel_callback=self._cancel_callback,
-            callback_group=self._callback_group,
-        )
-
-        self._home_server = ActionServer(
-            self,
-            MockAction,
-            "humanoid/return_home",
-            execute_callback=self._execute_return_home,
-            goal_callback=self._goal_callback,
-            cancel_callback=self._cancel_callback,
-            callback_group=self._callback_group,
-        )
 
         # Publish location at 1Hz
         self._location_timer = self.create_timer(1.0, self._publish_location)
@@ -87,7 +71,7 @@ class MockNavigationNode(LinguaMixin, Node):
                 "Moves the robot to a named location in the environment. "
                 "The robot must be balanced before navigation can begin."
             ),
-            ros_action="humanoid/navigate",
+            ros_action=f"{self.get_name()}/lingua",
             parameters=[
                 CapabilityParameter(
                     name="location_name",
@@ -115,7 +99,7 @@ class MockNavigationNode(LinguaMixin, Node):
         self.register_lingua_capability(Capability(
             name="return_to_home",
             description="Returns the robot to its home/starting position.",
-            ros_action="humanoid/return_home",
+            ros_action=f"{self.get_name()}/lingua",
             parameters=[],
             preconditions=["robot_is_balanced"],
             postconditions=["robot_at_location"],
@@ -126,60 +110,48 @@ class MockNavigationNode(LinguaMixin, Node):
         self._log(f"MockNavigationNode ready. Starting at: {self._current_location}")
         self.get_logger().info("MockNavigationNode ready.")
 
-    def _goal_callback(self, goal_request):
-        return GoalResponse.ACCEPT
+    def lingua_current_state(self):
+        if self._arrived:
+            return ["robot_at_location"], []
+        return [], []
 
-    def _cancel_callback(self, goal_handle):
-        return CancelResponse.ACCEPT
+    async def execute_capability(self, capability_name, parameters, goal_handle):
+        if capability_name == "navigate_to_location":
+            location = str(parameters.get("location_name", "")).strip()
+            if not location:
+                return False, "navigate_to_location needs a location_name", [], []
+            return self._walk_to(location, goal_handle)
+        if capability_name == "return_to_home":
+            return self._walk_to("home", goal_handle)
+        return False, f"Unknown capability: {capability_name}", [], []
 
-    def _execute_navigate(self, goal_handle):
-        # The goal order field is repurposed as location index in the mock
-        # In real usage, this would be a proper typed goal with location_name
-        # For the mock we use a workaround: encode location in the order field
-        # Real dispatcher integration will pass proper typed goals
-        location = getattr(goal_handle.request, "_location_name", "table")
+    def _walk_to(self, location: str, goal_handle):
         walk_time = LOCATION_WALK_TIMES.get(location, DEFAULT_WALK_TIME)
+        self._arrived = False   # left the previous location
 
         self.get_logger().info(f"Navigation: walking to '{location}'...")
         self._log(f"🚶 Navigating to '{location}' (ETA: {walk_time}s)...")
 
-        # Clear previous location state
-        self.update_lingua_state(clear_tokens=["robot_at_location"])
-
         steps = int(walk_time / 0.5)
         for i in range(steps):
             if goal_handle.is_cancel_requested:
-                goal_handle.canceled()
                 self._log(f"❌ Navigation to '{location}' cancelled.")
-                return MockAction.Result()
+                # The robot stopped somewhere along the way
+                return False, f"Navigation to '{location}' cancelled", [], ["robot_at_location"]
             time.sleep(0.5)
+            goal_handle.publish_feedback(
+                self._make_feedback(f"Walking to {location}...", (i + 1) / steps)
+            )
 
         # Arrived
         self._current_location = location
+        self._arrived = True
         self._publish_location()
-        self.update_lingua_state(set_tokens=["robot_at_location"])
 
         self._log(f"✅ Arrived at '{location}'.")
         self.get_logger().info(f"Navigation: arrived at '{location}'.")
 
-        goal_handle.succeed()
-        return MockAction.Result()
-
-    def _execute_return_home(self, goal_handle):
-        self.get_logger().info("Navigation: returning home...")
-        self._log("🏠 Returning to home position...")
-
-        self.update_lingua_state(clear_tokens=["robot_at_location"])
-
-        time.sleep(3.0)
-
-        self._current_location = "home"
-        self._publish_location()
-        self.update_lingua_state(set_tokens=["robot_at_location"])
-
-        self._log("✅ Returned home.")
-        goal_handle.succeed()
-        return MockAction.Result()
+        return True, f"Arrived at '{location}'", ["robot_at_location"], []
 
     def _publish_location(self):
         msg = String()
@@ -195,13 +167,17 @@ class MockNavigationNode(LinguaMixin, Node):
 def main(args=None):
     rclpy.init(args=args)
     node = MockNavigationNode()
+    # Multi-threaded so cancel requests are handled while a goal is executing
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
+        executor.spin()
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        executor.shutdown()
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()  # SIGINT may already have shut the context down
 
 
 if __name__ == "__main__":

@@ -6,16 +6,22 @@ Mixin for ROS 2 nodes to self-register capabilities with the GroundingNode.
 Robustness additions:
 - Registration retries with backoff if the GroundingNode isn't up yet
 - State update failures are logged but don't crash the node
+- Once the node is spinning, registration and state updates are sent
+  asynchronously, so they are safe to call from callbacks
 """
 
 import json
 import time
+
 import rclpy
-from rclpy.node import Node
 from std_msgs.msg import Empty
 
-from ros2_lingua_interfaces.srv import RegisterCapability, UpdateState
 from ros2_lingua_core import Capability
+from ros2_lingua_interfaces.srv import RegisterCapability, UpdateState
+
+# Retry schedule for asynchronous (re-)registration
+ASYNC_REGISTER_ATTEMPTS = 3
+ASYNC_REGISTER_RETRY_SEC = 1.0
 
 
 class LinguaMixin:
@@ -39,7 +45,8 @@ class LinguaMixin:
             UpdateState, "lingua/update_state"
         )
         self._registered_capabilities = []
-        
+        self._reregister_timer = None
+
         self._reregister_sub = self.create_subscription(
             Empty,
             "lingua/request_reregister",
@@ -47,21 +54,53 @@ class LinguaMixin:
             10
         )
 
+    def _is_spinning(self) -> bool:
+        """True once the node has been added to an executor."""
+        return self.executor is not None
+
+    def _call_later(self, delay_sec: float, callback) -> None:
+        """Run callback once after delay_sec (ROS 2 timers repeat, so cancel it on first call)."""
+        timer = None
+
+        def _fire():
+            self.destroy_timer(timer)
+            callback()
+
+        timer = self.create_timer(delay_sec, _fire)
+
     def _handle_reregister_request(self, msg: Empty):
         """Callback when GroundingNode restarts and requests re-registration."""
         if not self._registered_capabilities:
             return
-            
+        if self._reregister_timer is not None:
+            return  # a re-registration is already scheduled
+
         self.get_logger().info("[Lingua] Grounding node requested re-registration. Re-registering capabilities...")
-        for cap in self._registered_capabilities:
-            # Run in a separate thread or timer to avoid blocking the subscription callback
-            # but since we already have retry logic with timeouts, it's safer to avoid blocking.
-            # Using a one-shot timer allows returning immediately.
-            self.create_timer(
-                0.1, 
-                lambda c=cap: self._execute_registration(c, 10.0, 3), 
-                callback_group=rclpy.callback_groups.MutuallyExclusiveCallbackGroup()
-            )
+        # Defer to a one-shot timer so this subscription callback returns immediately
+        self._reregister_timer = self.create_timer(0.1, self._reregister_all)
+
+    def _reregister_all(self) -> None:
+        timer, self._reregister_timer = self._reregister_timer, None
+        if timer is not None:
+            self.destroy_timer(timer)
+        for capability in list(self._registered_capabilities):
+            self._register_async(capability, ASYNC_REGISTER_ATTEMPTS)
+        # A restarted GroundingNode has an empty state, so report ours again
+        self.publish_lingua_current_state()
+
+    def lingua_current_state(self) -> tuple:
+        """
+        Override to report this node's current symbolic state as (set_tokens, clear_tokens).
+
+        Sent by publish_lingua_current_state(), and again after every
+        re-registration, so a restarted GroundingNode learns it too.
+        """
+        return [], []
+
+    def publish_lingua_current_state(self) -> bool:
+        """Send lingua_current_state() to the GroundingNode."""
+        set_tokens, clear_tokens = self.lingua_current_state()
+        return self.update_lingua_state(set_tokens=list(set_tokens), clear_tokens=list(clear_tokens))
 
     def register_lingua_capability(
         self,
@@ -76,21 +115,70 @@ class LinguaMixin:
         GroundingNode service isn't available yet — useful during startup
         when node launch order isn't guaranteed.
 
+        Before the node is spinning (e.g. in __init__) this blocks until the
+        registration finishes. Once the node is spinning, the registration is
+        sent asynchronously and the result is logged.
+
         Args:
             capability:    The Capability to register
             wait_timeout:  Seconds to wait for the service per attempt
             max_retries:   Number of retry attempts before giving up
 
         Returns:
-            True on success, False on failure.
+            True on success (or when sent asynchronously), False on failure.
         """
-        if capability not in self._registered_capabilities:
-            self._registered_capabilities.append(capability)
-            
+        # Keep one entry per name so re-registration sends the latest definition only
+        self._registered_capabilities = [
+            c for c in self._registered_capabilities if c.name != capability.name
+        ]
+        self._registered_capabilities.append(capability)
+
+        if self._is_spinning():
+            self._register_async(capability, max_retries)
+            return True
+
         return self._execute_registration(capability, wait_timeout, max_retries)
 
+    def _register_async(self, capability: Capability, attempts_left: int) -> None:
+        """Send a registration without blocking; retry on a timer if the service is down."""
+        logger = self.get_logger()
+
+        if not self._lingua_register_client.service_is_ready():
+            if attempts_left > 1:
+                logger.warn(
+                    f"[Lingua] lingua/register_capability not available for "
+                    f"'{capability.name}'. Retrying in {ASYNC_REGISTER_RETRY_SEC:.0f}s..."
+                )
+                self._call_later(
+                    ASYNC_REGISTER_RETRY_SEC,
+                    lambda: self._register_async(capability, attempts_left - 1),
+                )
+            else:
+                logger.error(
+                    f"[Lingua] Could not reach lingua/register_capability to "
+                    f"register '{capability.name}'. Is the GroundingNode running?"
+                )
+            return
+
+        request = RegisterCapability.Request()
+        request.capability_json = capability.to_json()
+        future = self._lingua_register_client.call_async(request)
+
+        def _on_done(f):
+            result = f.result()
+            if result is None:
+                logger.error(f"[Lingua] Registration of '{capability.name}' failed.")
+            elif result.success:
+                logger.info(f"Registered capability: '{capability.name}'")
+            else:
+                logger.error(
+                    f"[Lingua] Registration rejected for '{capability.name}': {result.message}"
+                )
+
+        future.add_done_callback(_on_done)
+
     def _execute_registration(self, capability: Capability, wait_timeout: float, max_retries: int) -> bool:
-        """Internal helper to execute the registration with retries."""
+        """Internal helper to execute the registration with retries (node not spinning yet)."""
         logger = self.get_logger()
         delay = 1.0
 
@@ -161,13 +249,17 @@ class LinguaMixin:
         """
         Notify the GroundingNode of a symbolic state change.
 
+        Before the node is spinning this waits for the reply. Once the node is
+        spinning, the update is sent asynchronously and failures are logged.
+
         Args:
             set_tokens:   State tokens to mark as True
             clear_tokens: State tokens to mark as False
             timeout_sec:  How long to wait for the service
 
         Returns:
-            True on success, False on failure (failure is non-fatal — logged only).
+            True on success (or when sent asynchronously), False on failure
+            (failure is non-fatal — logged only).
         """
         logger = self.get_logger()
 
@@ -179,15 +271,30 @@ class LinguaMixin:
         if not set_tokens and not clear_tokens:
             return True   # no-op
 
-        if not self._lingua_state_client.wait_for_service(timeout_sec=2.0):
-            logger.warn("[Lingua] lingua/update_state not available — state update skipped.")
-            return False
-
         request = UpdateState.Request()
         request.state_json = json.dumps({
             "set": set_tokens,
             "clear": clear_tokens,
         })
+
+        if self._is_spinning():
+            if not self._lingua_state_client.service_is_ready():
+                logger.warn("[Lingua] lingua/update_state not available — state update skipped.")
+                return False
+            future = self._lingua_state_client.call_async(request)
+
+            def _on_done(f):
+                result = f.result()
+                if result is None or not result.success:
+                    message = result.message if result is not None else "no response"
+                    logger.warn(f"[Lingua] State update failed: {message}")
+
+            future.add_done_callback(_on_done)
+            return True
+
+        if not self._lingua_state_client.wait_for_service(timeout_sec=2.0):
+            logger.warn("[Lingua] lingua/update_state not available — state update skipped.")
+            return False
 
         future = self._lingua_state_client.call_async(request)
         rclpy.spin_until_future_complete(self, future, timeout_sec=timeout_sec)

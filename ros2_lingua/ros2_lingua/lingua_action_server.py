@@ -74,9 +74,8 @@ Usage:
 """
 
 import json
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
-import rclpy
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 
@@ -175,7 +174,11 @@ class LinguaActionServer:
             result.message = str(e)
             return result
 
-        if success:
+        # A goal the dispatcher cancelled must end as CANCELED, not SUCCEEDED/ABORTED
+        if goal_handle.is_cancel_requested:
+            goal_handle.canceled()
+            success = False
+        elif success:
             goal_handle.succeed()
         else:
             goal_handle.abort()
@@ -201,6 +204,9 @@ class LinguaActionServer:
 
         The dispatcher automatically calls update_lingua_state() with
         the returned state_set and state_clear lists.
+
+        Check goal_handle.is_cancel_requested while working and return
+        early when it is set; the goal is then reported as CANCELED.
 
         Publish progress feedback via:
             goal_handle.publish_feedback(self._make_feedback("status", 0.5))

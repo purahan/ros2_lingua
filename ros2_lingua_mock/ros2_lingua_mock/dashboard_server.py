@@ -3,6 +3,7 @@ import threading
 import http.server
 import functools
 import rclpy
+from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
 from ament_index_python.packages import get_package_prefix
 
@@ -56,13 +57,16 @@ class DashboardServerNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = DashboardServerNode()
+    executor = SingleThreadedExecutor()
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
+        executor.spin()
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        executor.shutdown()
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()  # SIGINT may already have shut the context down
 
 
 if __name__ == "__main__":

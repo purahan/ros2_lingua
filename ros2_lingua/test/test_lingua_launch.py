@@ -25,24 +25,17 @@ from ros2_lingua_interfaces.srv import RegisterCapability
 def generate_test_description():
     """Launch the canonical lingua.launch.py file."""
 
-    launch_file_dir = os.path.join(
-        get_package_share_directory("ros2_lingua"), "launch"
-    )
+    launch_file_dir = os.path.join(get_package_share_directory("ros2_lingua"), "launch")
 
     lingua_launch = launch.actions.IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(launch_file_dir, "lingua.launch.py")
-        ),
+        PythonLaunchDescriptionSource(os.path.join(launch_file_dir, "lingua.launch.py")),
         launch_arguments={
             "llm_backend": "mock",
             "robot_namespace": "test_ns",
-        }.items()
+        }.items(),
     )
 
-    return launch.LaunchDescription([
-        lingua_launch,
-        launch_testing.actions.ReadyToTest()
-    ]), {
+    return launch.LaunchDescription([lingua_launch, launch_testing.actions.ReadyToTest()]), {
         "lingua_launch": lingua_launch,
     }
 
@@ -70,18 +63,17 @@ class TestLinguaLaunch(unittest.TestCase):
 
     def test_services_available(self):
         """Wait for the namespaced services to appear."""
-        assert self.register_client.wait_for_service(timeout_sec=10.0), \
+        assert self.register_client.wait_for_service(timeout_sec=10.0), (
             "RegisterCapability service not available under namespace"
+        )
         # Also wait for the dispatcher, so shutdown never interrupts it mid-startup
-        assert self.cancel_client.wait_for_service(timeout_sec=10.0), \
+        assert self.cancel_client.wait_for_service(timeout_sec=10.0), (
             "Dispatcher cancel service not available under namespace"
+        )
 
 
 @launch_testing.post_shutdown_test()
 class TestLinguaLaunchShutdown(unittest.TestCase):
     def test_node_exit_code(self, proc_info):
         """Check that all launched processes exit cleanly."""
-        launch_testing.asserts.assertExitCodes(
-            proc_info,
-            allowable_exit_codes=[0, -2, 130]
-        )
+        launch_testing.asserts.assertExitCodes(proc_info, allowable_exit_codes=[0, -2, 130])

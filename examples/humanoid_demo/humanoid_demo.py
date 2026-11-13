@@ -125,48 +125,55 @@ SAY = Capability(
 # ------------------------------------------------------------------
 
 DEMO_PLANS = {
-    "pick up the bottle from the table": json.dumps({
-        "feasible": True,
-        "reason": "",
-        "steps": [
-            {
-                "capability_name": "navigate_to_location",
-                "parameters": {"location_name": "table"},
-                "rationale": "Must navigate to the table before picking up the bottle",
-            },
-            {
-                "capability_name": "pick_up_object",
-                "parameters": {"object_name": "bottle", "arm": "right"},
-                "rationale": "Pick up the bottle with the right arm",
-            },
-        ],
-    }),
-    "go to the door and say hello": json.dumps({
-        "feasible": True,
-        "reason": "",
-        "steps": [
-            {
-                "capability_name": "navigate_to_location",
-                "parameters": {"location_name": "door"},
-                "rationale": "Navigate to the door as instructed",
-            },
-            {
-                "capability_name": "say",
-                "parameters": {"message": "Hello!"},
-                "rationale": "Say hello as instructed",
-            },
-        ],
-    }),
-    "fly to the moon": json.dumps({
-        "feasible": False,
-        "reason": "No capability exists for flying or space travel.",
-        "steps": [],
-    }),
+    "pick up the bottle from the table": json.dumps(
+        {
+            "feasible": True,
+            "reason": "",
+            "steps": [
+                {
+                    "capability_name": "navigate_to_location",
+                    "parameters": {"location_name": "table"},
+                    "rationale": "Must navigate to the table before picking up the bottle",
+                },
+                {
+                    "capability_name": "pick_up_object",
+                    "parameters": {"object_name": "bottle", "arm": "right"},
+                    "rationale": "Pick up the bottle with the right arm",
+                },
+            ],
+        }
+    ),
+    "go to the door and say hello": json.dumps(
+        {
+            "feasible": True,
+            "reason": "",
+            "steps": [
+                {
+                    "capability_name": "navigate_to_location",
+                    "parameters": {"location_name": "door"},
+                    "rationale": "Navigate to the door as instructed",
+                },
+                {
+                    "capability_name": "say",
+                    "parameters": {"message": "Hello!"},
+                    "rationale": "Say hello as instructed",
+                },
+            ],
+        }
+    ),
+    "fly to the moon": json.dumps(
+        {
+            "feasible": False,
+            "reason": "No capability exists for flying or space travel.",
+            "steps": [],
+        }
+    ),
 }
 
 
 class DemoMockBackend:
     """Mock backend that uses the DEMO_PLANS dictionary."""
+
     def complete(self, messages):
         # Extract the instruction from the last user message
         instruction = messages[-1]["content"].lower().strip()
@@ -175,16 +182,19 @@ class DemoMockBackend:
             if key in instruction or instruction in key:
                 return plan
         # Default: not feasible
-        return json.dumps({
-            "feasible": False,
-            "reason": f"No matching capability for: '{instruction}'",
-            "steps": [],
-        })
+        return json.dumps(
+            {
+                "feasible": False,
+                "reason": f"No matching capability for: '{instruction}'",
+                "steps": [],
+            }
+        )
 
 
 # ------------------------------------------------------------------
 # Run the demo
 # ------------------------------------------------------------------
+
 
 def run_demo():
     print("=" * 60)
@@ -215,7 +225,7 @@ def run_demo():
 
     for instruction in instructions:
         print("-" * 60)
-        print(f"📢 Instruction: \"{instruction}\"")
+        print(f'📢 Instruction: "{instruction}"')
 
         plan = engine.ground(instruction)
 

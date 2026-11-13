@@ -35,17 +35,20 @@ from ros2_lingua_interfaces.srv import GroundInstruction
 # Launch configuration
 # ------------------------------------------------------------------
 
+
 @pytest.mark.launch_test
 def generate_test_description():
     grounding_node = launch_ros.actions.Node(
         package="ros2_lingua",
         executable="grounding_node",
         name="lingua_grounding_node",
-        parameters=[{
-            "llm_backend": "mock",
-            "llm_model": "mock",
-            "auto_chain": True,
-        }],
+        parameters=[
+            {
+                "llm_backend": "mock",
+                "llm_model": "mock",
+                "auto_chain": True,
+            }
+        ],
         output="screen",
     )
 
@@ -85,15 +88,17 @@ def generate_test_description():
     )
 
     return (
-        launch.LaunchDescription([
-            grounding_node,
-            dispatcher_node,
-            balance_node,
-            navigation_node,
-            manipulation_node,
-            speech_node,
-            launch_testing.actions.ReadyToTest(),
-        ]),
+        launch.LaunchDescription(
+            [
+                grounding_node,
+                dispatcher_node,
+                balance_node,
+                navigation_node,
+                manipulation_node,
+                speech_node,
+                launch_testing.actions.ReadyToTest(),
+            ]
+        ),
         {
             "grounding_node": grounding_node,
             "dispatcher_node": dispatcher_node,
@@ -104,6 +109,7 @@ def generate_test_description():
 # ------------------------------------------------------------------
 # Capability subscriber helper
 # ------------------------------------------------------------------
+
 
 class CapabilitySubscriberNode(Node):
     """Listens to /lingua/capabilities and collects registered capabilities."""
@@ -119,9 +125,7 @@ class CapabilitySubscriberNode(Node):
             self._handle_caps,
             10,
         )
-        self._ground_client = self.create_client(
-            GroundInstruction, "/lingua/ground"
-        )
+        self._ground_client = self.create_client(GroundInstruction, "/lingua/ground")
 
     def _handle_caps(self, msg):
         try:
@@ -148,16 +152,17 @@ class CapabilitySubscriberNode(Node):
 # Tests
 # ------------------------------------------------------------------
 
-class TestMockNodes(unittest.TestCase):
 
+class TestMockNodes(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not rclpy.ok():
             rclpy.init()
         cls.node = CapabilitySubscriberNode()
         # Wait for all mock nodes to register (7 capabilities total)
-        assert cls.node.wait_for_capabilities(min_count=7, timeout=25.0), \
+        assert cls.node.wait_for_capabilities(min_count=7, timeout=25.0), (
             "Mock nodes did not register all capabilities within timeout"
+        )
 
     @classmethod
     def tearDownClass(cls):
@@ -178,10 +183,7 @@ class TestMockNodes(unittest.TestCase):
             "say",
         }
         missing = expected - set(caps.keys())
-        self.assertEqual(
-            missing, set(),
-            f"Missing capabilities: {missing}"
-        )
+        self.assertEqual(missing, set(), f"Missing capabilities: {missing}")
 
     def test_02_balance_node_capability(self):
         """stabilize_robot should have correct tags and postconditions."""
@@ -234,18 +236,14 @@ class TestMockNodes(unittest.TestCase):
         caps = self.node.get_capabilities()
         for name, cap in caps.items():
             self.assertNotEqual(
-                cap.get("description", ""), "",
-                f"Capability '{name}' has empty description"
+                cap.get("description", ""), "", f"Capability '{name}' has empty description"
             )
 
     def test_09_all_capabilities_have_tags(self):
         """Every capability should have at least one tag."""
         caps = self.node.get_capabilities()
         for name, cap in caps.items():
-            self.assertGreater(
-                len(cap.get("tags", [])), 0,
-                f"Capability '{name}' has no tags"
-            )
+            self.assertGreater(len(cap.get("tags", [])), 0, f"Capability '{name}' has no tags")
 
     def test_10_capabilities_broadcast_is_valid_json(self):
         """The /lingua/capabilities topic should always broadcast valid JSON."""
@@ -272,19 +270,17 @@ class TestMockNodes(unittest.TestCase):
         unsatisfied = nav_preconditions - stabilize_postconditions
 
         self.assertEqual(
-            unsatisfied, set(),
+            unsatisfied,
+            set(),
             f"navigate_to_location has preconditions that stabilize_robot "
-            f"does not satisfy: {unsatisfied}"
+            f"does not satisfy: {unsatisfied}",
         )
 
     def test_12_no_duplicate_capability_names(self):
         """Each capability name must be unique across all nodes."""
         caps = self.node.get_capabilities()
         names = list(caps.keys())
-        self.assertEqual(
-            len(names), len(set(names)),
-            "Duplicate capability names detected"
-        )
+        self.assertEqual(len(names), len(set(names)), "Duplicate capability names detected")
 
 
 @launch_testing.post_shutdown_test()

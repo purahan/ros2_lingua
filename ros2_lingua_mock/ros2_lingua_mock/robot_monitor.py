@@ -25,9 +25,7 @@ class RobotMonitor(Node):
     def __init__(self):
         super().__init__("robot_monitor")
 
-        self._log_sub = self.create_subscription(
-            String, "/mock/robot_log", self._handle_log, 50
-        )
+        self._log_sub = self.create_subscription(String, "/mock/robot_log", self._handle_log, 50)
         self._location_sub = self.create_subscription(
             String, "/mock/current_location", self._handle_location, 10
         )
@@ -47,9 +45,9 @@ class RobotMonitor(Node):
         self._last_location = "home"
         self._is_balanced = False
 
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("  🤖  ros2_lingua Robot Monitor")
-        print("="*60 + "\n")
+        print("=" * 60 + "\n")
 
     def _handle_log(self, msg: String):
         print(f"  {msg.data}")
@@ -70,16 +68,17 @@ class RobotMonitor(Node):
 
     def _handle_plan(self, msg: String):
         import json
+
         try:
             plan = json.loads(msg.data)
             steps = plan.get("steps", [])
             instruction = plan.get("original_instruction", "")
-            print(f"\n{'─'*60}")
-            print(f"  📋 New plan for: \"{instruction}\"")
+            print(f"\n{'─' * 60}")
+            print(f'  📋 New plan for: "{instruction}"')
             for i, step in enumerate(steps, 1):
                 auto = " [auto]" if "Auto-inserted" in step.get("rationale", "") else ""
                 print(f"     {i}. {step['capability_name']}{auto}")
-            print(f"{'─'*60}\n")
+            print(f"{'─' * 60}\n")
         except Exception:
             pass
 

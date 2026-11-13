@@ -53,26 +53,28 @@ class MockSpeechNode(LinguaMixin, Node):
         )
 
         # Register capabilities
-        self.register_lingua_capability(Capability(
-            name="say",
-            description=(
-                "Speaks a message aloud using the robot's text-to-speech system. "
-                "Can be used to greet people, report status, or narrate actions."
-            ),
-            ros_service=service_name,
-            parameters=[
-                CapabilityParameter(
-                    name="message",
-                    type="string",
-                    description="The message to speak aloud",
-                    required=True,
+        self.register_lingua_capability(
+            Capability(
+                name="say",
+                description=(
+                    "Speaks a message aloud using the robot's text-to-speech system. "
+                    "Can be used to greet people, report status, or narrate actions."
                 ),
-            ],
-            preconditions=[],
-            postconditions=[],
-            metadata={},
-            tags=["speech", "social"],
-        ))
+                ros_service=service_name,
+                parameters=[
+                    CapabilityParameter(
+                        name="message",
+                        type="string",
+                        description="The message to speak aloud",
+                        required=True,
+                    ),
+                ],
+                preconditions=[],
+                postconditions=[],
+                metadata={},
+                tags=["speech", "social"],
+            )
+        )
 
         self._log("MockSpeechNode ready.")
         self.get_logger().info("MockSpeechNode ready.")
@@ -105,7 +107,7 @@ class MockSpeechNode(LinguaMixin, Node):
         speak_time = max(0.5, word_count / 3.0)
 
         self.get_logger().info(f"Speech: saying '{message}'")
-        self._log(f"🔊 \"{message}\"")
+        self._log(f'🔊 "{message}"')
 
         # Publish to speech output topic (useful for monitoring in the demo)
         speech_msg = String()

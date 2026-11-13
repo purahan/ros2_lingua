@@ -56,19 +56,21 @@ class MockBalanceNode(LinguaMixin, LinguaActionServer, Node):
         self._status_timer = self.create_timer(0.5, self._publish_status)
 
         # Register capability with lingua
-        self.register_lingua_capability(Capability(
-            name="stabilize_robot",
-            description=(
-                "Activates the balance controller and stabilizes the robot. "
-                "Must be called before any locomotion or manipulation."
-            ),
-            ros_action=f"{self.get_name()}/lingua",
-            parameters=[],
-            preconditions=[],
-            postconditions=["robot_is_balanced"],
-            metadata={"estimated_duration_sec": 2.0},
-            tags=["balance"],
-        ))
+        self.register_lingua_capability(
+            Capability(
+                name="stabilize_robot",
+                description=(
+                    "Activates the balance controller and stabilizes the robot. "
+                    "Must be called before any locomotion or manipulation."
+                ),
+                ros_action=f"{self.get_name()}/lingua",
+                parameters=[],
+                preconditions=[],
+                postconditions=["robot_is_balanced"],
+                metadata={"estimated_duration_sec": 2.0},
+                tags=["balance"],
+            )
+        )
 
         self._log("MockBalanceNode ready. Robot starts UNSTABILIZED.")
         self.get_logger().info("MockBalanceNode ready.")
@@ -94,9 +96,7 @@ class MockBalanceNode(LinguaMixin, LinguaActionServer, Node):
                 self._log("❌ Stabilization cancelled.")
                 return False, "Stabilization cancelled", [], []
             time.sleep(0.4)
-            goal_handle.publish_feedback(
-                self._make_feedback("Stabilizing...", (i + 1) / steps)
-            )
+            goal_handle.publish_feedback(self._make_feedback("Stabilizing...", (i + 1) / steps))
             self.get_logger().info(f"Balance: stabilizing... ({i + 1}/{steps})")
 
         # Mark balanced

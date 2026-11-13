@@ -50,7 +50,7 @@ class DashboardServerNode(Node):
         )
 
     def destroy_node(self):
-        if hasattr(self, '_server'):
+        if hasattr(self, "_server"):
             self._server.shutdown()
         super().destroy_node()
 

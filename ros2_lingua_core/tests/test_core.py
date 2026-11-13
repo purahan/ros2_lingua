@@ -2090,8 +2090,9 @@ class TestBackendErrorHandling:
 
         from ros2_lingua_core import OpenAIBackend
 
-        with patch.dict("sys.modules", {"openai": None}), pytest.raises(
-            ImportError, match="openai package is required"
+        with (
+            patch.dict("sys.modules", {"openai": None}),
+            pytest.raises(ImportError, match="openai package is required"),
         ):
             OpenAIBackend(api_key="test")
 
@@ -2101,8 +2102,9 @@ class TestBackendErrorHandling:
 
         from ros2_lingua_core import AnthropicBackend
 
-        with patch.dict("sys.modules", {"anthropic": None}), pytest.raises(
-            ImportError, match="anthropic package is required"
+        with (
+            patch.dict("sys.modules", {"anthropic": None}),
+            pytest.raises(ImportError, match="anthropic package is required"),
         ):
             AnthropicBackend(api_key="test")
 
@@ -2112,8 +2114,9 @@ class TestBackendErrorHandling:
 
         from ros2_lingua_core import OllamaBackend
 
-        with patch.dict("sys.modules", {"ollama": None}), pytest.raises(
-            ImportError, match="ollama package is required"
+        with (
+            patch.dict("sys.modules", {"ollama": None}),
+            pytest.raises(ImportError, match="ollama package is required"),
         ):
             OllamaBackend()
 

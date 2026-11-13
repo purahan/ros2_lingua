@@ -63,29 +63,34 @@ FETCH_CAPABILITY = {
     "description": "Fetches a named object",
     "ros_action": f"{ROBOT_NODE_NAME}/lingua",
     "ros_service": None,
-    "parameters": [{
-        "name": "object_name",
-        "type": "string",
-        "description": "Object to fetch",
-        "required": True,
-        "default": None,
-    }],
+    "parameters": [
+        {
+            "name": "object_name",
+            "type": "string",
+            "description": "Object to fetch",
+            "required": True,
+            "default": None,
+        }
+    ],
     "preconditions": ["e2e_ready"],
     "postconditions": ["e2e_holding"],
     "metadata": {},
     "tags": ["test"],
 }
 
-FIXED_PLAN = json.dumps({
-    "feasible": True,
-    "steps": [{"capability_name": "e2e_fetch", "parameters": {"object_name": "cup"}}],
-    "reason": "test plan",
-})
+FIXED_PLAN = json.dumps(
+    {
+        "feasible": True,
+        "steps": [{"capability_name": "e2e_fetch", "parameters": {"object_name": "cup"}}],
+        "reason": "test plan",
+    }
+)
 
 
 # ------------------------------------------------------------------
 # Launch configuration
 # ------------------------------------------------------------------
+
 
 @pytest.mark.launch_test
 def generate_test_description():
@@ -93,11 +98,13 @@ def generate_test_description():
         package="ros2_lingua",
         executable="grounding_node",
         name="lingua_grounding_node",
-        parameters=[{
-            "llm_backend": "mock",
-            "mock_response": FIXED_PLAN,
-            "auto_chain": True,
-        }],
+        parameters=[
+            {
+                "llm_backend": "mock",
+                "mock_response": FIXED_PLAN,
+                "auto_chain": True,
+            }
+        ],
         output="screen",
     )
 
@@ -110,11 +117,13 @@ def generate_test_description():
     )
 
     return (
-        launch.LaunchDescription([
-            grounding_node,
-            dispatcher_node,
-            launch_testing.actions.ReadyToTest(),
-        ]),
+        launch.LaunchDescription(
+            [
+                grounding_node,
+                dispatcher_node,
+                launch_testing.actions.ReadyToTest(),
+            ]
+        ),
         {
             "grounding_node": grounding_node,
             "dispatcher_node": dispatcher_node,
@@ -125,6 +134,7 @@ def generate_test_description():
 # ------------------------------------------------------------------
 # Test nodes
 # ------------------------------------------------------------------
+
 
 class E2ETestRobot(LinguaActionServer, Node):
     """Records every capability call it executes."""
@@ -151,9 +161,7 @@ class E2EClient(Node):
         self._capability_names = set()
 
         self.ground_client = self.create_client(GroundInstruction, "/lingua/ground")
-        self.register_client = self.create_client(
-            RegisterCapability, "/lingua/register_capability"
-        )
+        self.register_client = self.create_client(RegisterCapability, "/lingua/register_capability")
         self.create_subscription(
             ExecutionStatus, "/lingua/execution_status", self._handle_status, 10
         )
@@ -198,8 +206,8 @@ def _wait_for_future(future, timeout):
 # Tests
 # ------------------------------------------------------------------
 
-class TestDispatchEndToEnd(unittest.TestCase):
 
+class TestDispatchEndToEnd(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not rclpy.ok():
@@ -211,10 +219,12 @@ class TestDispatchEndToEnd(unittest.TestCase):
         cls.spin_thread = threading.Thread(target=cls.executor.spin, daemon=True)
         cls.spin_thread.start()
 
-        assert cls.client.ground_client.wait_for_service(timeout_sec=15.0), \
+        assert cls.client.ground_client.wait_for_service(timeout_sec=15.0), (
             "lingua/ground not available"
-        assert cls.client.register_client.wait_for_service(timeout_sec=15.0), \
+        )
+        assert cls.client.register_client.wait_for_service(timeout_sec=15.0), (
             "lingua/register_capability not available"
+        )
 
         for capability in (PREPARE_CAPABILITY, FETCH_CAPABILITY):
             request = RegisterCapability.Request()

@@ -105,16 +105,16 @@ class LinguaActionServer:
         # Import here to avoid hard dep at module level
         try:
             from ros2_lingua_interfaces.action import LinguaAction
+
             self._LinguaAction = LinguaAction
         except ImportError as e:
             raise ImportError(
-                "ros2_lingua_interfaces not found. "
-                "Did you build the workspace? Try: colcon build"
+                "ros2_lingua_interfaces not found. Did you build the workspace? Try: colcon build"
             ) from e
 
         node_name = self.get_name()  # type: ignore
         self._lingua_action_server = ActionServer(
-            self,                              # type: ignore
+            self,  # type: ignore
             LinguaAction,
             f"{node_name}/lingua",
             execute_callback=self._lingua_execute,
@@ -140,7 +140,7 @@ class LinguaActionServer:
         return CancelResponse.ACCEPT
 
     async def _lingua_execute(self, goal_handle):
-        cap_name   = goal_handle.request.capability_name
+        cap_name = goal_handle.request.capability_name
         params_raw = goal_handle.request.parameters_json
 
         try:
@@ -185,7 +185,7 @@ class LinguaActionServer:
         result = self._LinguaAction.Result()
         result.success = success
         result.message = message
-        result.state_set   = list(state_set)
+        result.state_set = list(state_set)
         result.state_clear = list(state_clear)
         return result
 
@@ -210,13 +210,11 @@ class LinguaActionServer:
         Publish progress feedback via:
             goal_handle.publish_feedback(self._make_feedback("status", 0.5))
         """
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement execute_capability()"
-        )
+        raise NotImplementedError(f"{self.__class__.__name__} must implement execute_capability()")
 
     def _make_feedback(self, status: str, progress: float = 0.0):
         """Convenience method to create feedback messages."""
         feedback = self._LinguaAction.Feedback()
-        feedback.status   = status
+        feedback.status = status
         feedback.progress = progress
         return feedback

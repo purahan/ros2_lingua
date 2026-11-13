@@ -17,7 +17,7 @@ Copy the example that matches your situation and adapt it.
 # The dispatcher calls it automatically. No configuration needed.
 # This is the path to take if you're building a new robot node.
 
-LEVEL_1_EXAMPLE = '''
+LEVEL_1_EXAMPLE = """
 from rclpy.node import Node
 from ros2_lingua import LinguaMixin
 from ros2_lingua.lingua_action_server import LinguaActionServer
@@ -91,7 +91,7 @@ class NavigationNode(LinguaMixin, LinguaActionServer, Node):
             return True, "Returned home", ["robot_at_location"], []
 
         return False, f"Unknown capability: {capability_name}", [], []
-'''
+"""
 
 
 # ==================================================================
@@ -181,7 +181,7 @@ config.register_action(
 # Override _call_action_typed() for maximum flexibility.
 # Use this when Levels 1 and 2 don't fit your architecture.
 
-LEVEL_3_EXAMPLE = '''
+LEVEL_3_EXAMPLE = """
 from ros2_lingua.dispatcher_node import DispatcherNode
 from rclpy.action import ActionClient
 import rclpy
@@ -222,7 +222,7 @@ class MyRobotDispatcher(DispatcherNode):
         result_future = future.result().get_result_async()
         rclpy.spin_until_future_complete(self, result_future, timeout_sec=timeout)
         return result_future.result() is not None
-'''
+"""
 
 if __name__ == "__main__":
     print("Integration level examples — see source comments for usage.")

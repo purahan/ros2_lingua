@@ -51,6 +51,7 @@ class ActionMapping:
         result_checker:   Optional function: action Result → bool (success?)
         timeout_sec:      How long to wait for the action to complete
     """
+
     capability_name: str
     action_type: Any
     action_name: str
@@ -72,6 +73,7 @@ class ServiceMapping:
         result_checker:   Optional function: service Response → bool
         timeout_sec:      How long to wait for the service response
     """
+
     capability_name: str
     service_type: Any
     service_name: str
@@ -118,8 +120,8 @@ class DispatchConfig:
     """
 
     def __init__(self):
-        self._actions:   dict[str, ActionMapping]  = {}
-        self._services:  dict[str, ServiceMapping] = {}
+        self._actions: dict[str, ActionMapping] = {}
+        self._services: dict[str, ServiceMapping] = {}
 
     def register_action(
         self,

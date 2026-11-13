@@ -2,12 +2,13 @@
 
 > **Give your robot the ability to understand natural language on any ROS 2 platform.**
 
-[![ROS 2](https://img.shields.io/badge/ROS%202-Humble-blue)](https://docs.ros.org/en/humble/)
+[![ROS 2](https://img.shields.io/badge/ROS%202-Humble%20%7C%20Jazzy-blue)](https://docs.ros.org/en/humble/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue)](./ros2_lingua_cpp)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green)](./LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/purahan/ros2_lingua/ci.yml?branch=main&label=CI)](https://github.com/purahan/ros2_lingua/actions)
-[![Tests](https://img.shields.io/badge/Tests-80%20unit%20%7C%2016%20integration-brightgreen)](./ros2_lingua_core/tests/)
+[![Lint](https://img.shields.io/github/actions/workflow/status/purahan/ros2_lingua/lint.yml?branch=main&label=Lint)](https://github.com/purahan/ros2_lingua/actions)
+[![Unit Tests](https://img.shields.io/github/actions/workflow/status/purahan/ros2_lingua/unit-tests.yml?branch=main&label=Unit%20Tests)](https://github.com/purahan/ros2_lingua/actions)
+[![Integration Tests](https://img.shields.io/github/actions/workflow/status/purahan/ros2_lingua/integration-tests.yml?branch=main&label=Integration%20Tests)](https://github.com/purahan/ros2_lingua/actions)
 [![Release](https://img.shields.io/github/v/release/purahan/ros2_lingua)](https://github.com/purahan/ros2_lingua/releases)
 [![Issues](https://img.shields.io/github/issues/purahan/ros2_lingua)](https://github.com/purahan/ros2_lingua/issues)
 
@@ -136,9 +137,9 @@ Most LLM-to-robot integrations today are one-off scripts i.e. they hardcode topi
 
 ## Prerequisites
 
-- ROS 2 Humble (Ubuntu 22.04)
+- ROS 2 Humble (Ubuntu 22.04) or Jazzy (Ubuntu 24.04)
 - Python 3.10+
-- C++17 (included with Humble's toolchain that is needed only for `ros2_lingua_cpp`)
+- C++17 (included with ROS 2's toolchain, needed only for `ros2_lingua_cpp`)
 - `rosbridge_suite` (for the web dashboard)
 - At least one LLM backend:
   - [Ollama](https://ollama.com/), recommended for local use, no API key needed

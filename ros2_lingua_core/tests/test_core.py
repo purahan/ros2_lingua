@@ -2074,3 +2074,187 @@ class TestRecoveryPlanner:
         assert decision.strategy == "replan"
         assert len(decision.new_plan.steps) == 1
         assert decision.new_plan.steps[0].capability_name == "pick_up_object"
+
+
+# ------------------------------------------------------------------
+# Backend error handling tests (for coverage improvement)
+# ------------------------------------------------------------------
+
+
+class TestBackendErrorHandling:
+    """Test SDK error classification and retry logic in backends."""
+
+    def test_openai_missing_import_raises(self):
+        """Test that missing openai package raises ImportError."""
+        from unittest.mock import patch
+
+        from ros2_lingua_core import OpenAIBackend
+
+        with patch.dict("sys.modules", {"openai": None}):
+            with pytest.raises(ImportError, match="openai package is required"):
+                OpenAIBackend(api_key="test")
+
+    def test_anthropic_missing_import_raises(self):
+        """Test that missing anthropic package raises ImportError."""
+        from unittest.mock import patch
+
+        from ros2_lingua_core import AnthropicBackend
+
+        with patch.dict("sys.modules", {"anthropic": None}):
+            with pytest.raises(ImportError, match="anthropic package is required"):
+                AnthropicBackend(api_key="test")
+
+    def test_ollama_missing_import_raises(self):
+        """Test that missing ollama package raises ImportError."""
+        from unittest.mock import patch
+
+        from ros2_lingua_core import OllamaBackend
+
+        with patch.dict("sys.modules", {"ollama": None}):
+            with pytest.raises(ImportError, match="ollama package is required"):
+                OllamaBackend()
+
+    def test_mock_backend_fixed_response(self):
+        """Test MockBackend returns fixed response."""
+        from ros2_lingua_core import MockBackend
+
+        response = '{"feasible": true, "steps": []}'
+        backend = MockBackend(response)
+        result = backend.complete([])
+        assert result == response
+
+    def test_mock_backend_infeasible_keyword_detection(self):
+        """Test MockBackend detects infeasibility keywords."""
+        import json
+
+        from ros2_lingua_core import MockBackend
+
+        backend = MockBackend()
+        result = backend.complete([{"role": "user", "content": "this is impossible"}])
+        parsed = json.loads(result)
+        assert not parsed["feasible"]
+
+    def test_mock_backend_failing_before_success(self):
+        """Test MockBackend.failing() raises then succeeds."""
+        from ros2_lingua_core import LLMTimeoutError, MockBackend
+
+        backend = MockBackend.failing(
+            LLMTimeoutError("timeout"), retries_before_success=1, success_response="OK"
+        )
+        # First call fails
+        with pytest.raises(LLMTimeoutError):
+            backend.complete([])
+        # Second call succeeds
+        result = backend.complete([])
+        assert result == "OK"
+
+    def test_retry_config_aggressive(self):
+        """Test RetryConfig.aggressive() creates appropriate config."""
+        from ros2_lingua_core import RetryConfig
+
+        r = RetryConfig.aggressive()
+        assert r.max_retries == 5
+        assert r.base_delay_sec == 2.0
+
+    def test_with_retry_no_retries_when_disabled(self):
+        """Test _with_retry when max_retries=0."""
+        from unittest.mock import patch
+
+        from ros2_lingua_core.backends import RetryConfig, _with_retry
+        from ros2_lingua_core import LLMTimeoutError
+
+        def failing_fn():
+            raise LLMTimeoutError("timeout")
+
+        retry_config = RetryConfig.no_retry()
+        with pytest.raises(LLMTimeoutError):
+            _with_retry(failing_fn, retry_config, "test")
+
+    def test_with_retry_respects_retry_on_timeout_flag(self):
+        """Test _with_retry skips retry when retry_on_timeout=False."""
+        from unittest.mock import patch
+
+        from ros2_lingua_core.backends import RetryConfig, _with_retry
+        from ros2_lingua_core import LLMTimeoutError
+
+        call_count = 0
+
+        def failing_fn():
+            nonlocal call_count
+            call_count += 1
+            raise LLMTimeoutError("timeout")
+
+        retry_config = RetryConfig(max_retries=5, retry_on_timeout=False)
+        with pytest.raises(LLMTimeoutError):
+            _with_retry(failing_fn, retry_config, "test")
+        assert call_count == 1  # Should not retry
+
+    def test_with_retry_respects_retry_on_rate_limit_flag(self):
+        """Test _with_retry skips retry when retry_on_rate_limit=False."""
+        from ros2_lingua_core.backends import RetryConfig, _with_retry
+        from ros2_lingua_core import LLMRateLimitError
+
+        call_count = 0
+
+        def failing_fn():
+            nonlocal call_count
+            call_count += 1
+            raise LLMRateLimitError("rate limit")
+
+        retry_config = RetryConfig(max_retries=5, retry_on_rate_limit=False)
+        with pytest.raises(LLMRateLimitError):
+            _with_retry(failing_fn, retry_config, "test")
+        assert call_count == 1  # Should not retry
+
+    def test_with_retry_never_retries_auth_error(self):
+        """Test _with_retry never retries LLMAuthError."""
+        from ros2_lingua_core.backends import RetryConfig, _with_retry
+        from ros2_lingua_core import LLMAuthError
+
+        call_count = 0
+
+        def failing_fn():
+            nonlocal call_count
+            call_count += 1
+            raise LLMAuthError("auth failed")
+
+        retry_config = RetryConfig(max_retries=5)
+        with pytest.raises(LLMAuthError):
+            _with_retry(failing_fn, retry_config, "test")
+        assert call_count == 1  # Should not retry
+
+    def test_with_retry_never_retries_model_not_found(self):
+        """Test _with_retry never retries LLMModelNotFoundError."""
+        from ros2_lingua_core.backends import RetryConfig, _with_retry
+        from ros2_lingua_core import LLMModelNotFoundError
+
+        call_count = 0
+
+        def failing_fn():
+            nonlocal call_count
+            call_count += 1
+            raise LLMModelNotFoundError("model not found")
+
+        retry_config = RetryConfig(max_retries=5)
+        with pytest.raises(LLMModelNotFoundError):
+            _with_retry(failing_fn, retry_config, "test")
+        assert call_count == 1  # Should not retry
+
+    def test_with_retry_succeeds_after_transient_errors(self):
+        """Test _with_retry succeeds after transient backend errors."""
+        from ros2_lingua_core.backends import RetryConfig, _with_retry
+        from ros2_lingua_core import LLMBackendError
+
+        call_count = 0
+
+        def failing_then_succeeding_fn():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise LLMBackendError("transient error")
+            return "success"
+
+        retry_config = RetryConfig(max_retries=5)
+        result = _with_retry(failing_then_succeeding_fn, retry_config, "test")
+        assert result == "success"
+        assert call_count == 3  # Should retry twice then succeed

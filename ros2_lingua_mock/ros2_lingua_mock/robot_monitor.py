@@ -14,7 +14,7 @@ Run it alongside the other nodes:
 import rclpy
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
-from std_msgs.msg import String, Bool
+from std_msgs.msg import Bool, String
 
 
 class RobotMonitor(Node):

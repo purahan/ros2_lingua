@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \".github/workflows\" -Filter \"*.yml\")",
+      "Bash(Select-Object -ExpandProperty Name)"
+    ]
+  }
+}

@@ -20,9 +20,9 @@ import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
-from ros2_lingua.capability_mixin import LinguaMixin
 from std_msgs.msg import String
 
+from ros2_lingua.capability_mixin import LinguaMixin
 from ros2_lingua_core import Capability, CapabilityParameter
 from ros2_lingua_interfaces.srv import LinguaService
 

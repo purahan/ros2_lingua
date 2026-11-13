@@ -18,14 +18,13 @@ For a full ROS 2 launch, use the launch file:
 """
 
 import json
+
 from ros2_lingua_core import (
     Capability,
     CapabilityParameter,
     CapabilityRegistry,
     GroundingEngine,
-    MockBackend,
 )
-
 
 # ------------------------------------------------------------------
 # Define humanoid robot capabilities

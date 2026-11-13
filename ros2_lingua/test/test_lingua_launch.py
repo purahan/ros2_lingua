@@ -13,19 +13,18 @@ import launch_testing
 import launch_testing.actions
 import launch_testing.markers
 import pytest
-from ament_index_python.packages import get_package_share_directory
-
 import rclpy
+from ament_index_python.packages import get_package_share_directory
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from std_srvs.srv import Empty
 
 from ros2_lingua_interfaces.srv import RegisterCapability
-from std_srvs.srv import Empty
 
 
 @pytest.mark.launch_test
 def generate_test_description():
     """Launch the canonical lingua.launch.py file."""
-    
+
     launch_file_dir = os.path.join(
         get_package_share_directory("ros2_lingua"), "launch"
     )

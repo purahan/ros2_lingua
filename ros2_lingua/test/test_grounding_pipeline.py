@@ -14,9 +14,9 @@ Run with:
 """
 
 import json
+import threading
 import time
 import unittest
-import threading
 
 import launch
 import launch_ros.actions
@@ -24,13 +24,11 @@ import launch_testing
 import launch_testing.actions
 import launch_testing.markers
 import pytest
-
 import rclpy
 from rclpy.node import Node
-
-from ros2_lingua_interfaces.srv import RegisterCapability, GroundInstruction, UpdateState
 from std_msgs.msg import String
 
+from ros2_lingua_interfaces.srv import GroundInstruction, RegisterCapability, UpdateState
 
 # ------------------------------------------------------------------
 # Test capability definitions

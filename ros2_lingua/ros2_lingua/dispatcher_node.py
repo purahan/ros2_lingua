@@ -52,7 +52,6 @@ from ros2_lingua_interfaces.action import LinguaAction
 from ros2_lingua_interfaces.msg import ExecutionStatus
 from ros2_lingua_interfaces.srv import LinguaService, UpdateState
 
-
 # How long to wait for a cancel request to be acknowledged by an action server
 CANCEL_TIMEOUT_SEC = 5.0
 

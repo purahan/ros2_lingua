@@ -36,9 +36,9 @@ import pytest
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from ros2_lingua.lingua_action_server import LinguaActionServer
 from std_msgs.msg import String
 
+from ros2_lingua.lingua_action_server import LinguaActionServer
 from ros2_lingua_interfaces.msg import ExecutionStatus
 from ros2_lingua_interfaces.srv import GroundInstruction, RegisterCapability
 

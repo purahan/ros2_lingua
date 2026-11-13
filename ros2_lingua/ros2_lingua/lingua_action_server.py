@@ -74,7 +74,6 @@ Usage:
 """
 
 import json
-from typing import List, Tuple
 
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -94,7 +93,7 @@ class LinguaActionServer:
         ros_action="my_navigation_node/lingua"
     """
 
-    def __init__(self, capability_names: List[str]):
+    def __init__(self, capability_names: list[str]):
         """
         Args:
             capability_names: List of capability names this server handles.
@@ -107,11 +106,11 @@ class LinguaActionServer:
         try:
             from ros2_lingua_interfaces.action import LinguaAction
             self._LinguaAction = LinguaAction
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
                 "ros2_lingua_interfaces not found. "
                 "Did you build the workspace? Try: colcon build"
-            )
+            ) from e
 
         node_name = self.get_name()  # type: ignore
         self._lingua_action_server = ActionServer(
@@ -195,7 +194,7 @@ class LinguaActionServer:
         capability_name: str,
         parameters: dict,
         goal_handle,
-    ) -> Tuple[bool, str, List[str], List[str]]:
+    ) -> tuple[bool, str, list[str], list[str]]:
         """
         Override this method in your node.
 

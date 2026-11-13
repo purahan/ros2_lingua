@@ -2090,9 +2090,10 @@ class TestBackendErrorHandling:
 
         from ros2_lingua_core import OpenAIBackend
 
-        with patch.dict("sys.modules", {"openai": None}):
-            with pytest.raises(ImportError, match="openai package is required"):
-                OpenAIBackend(api_key="test")
+        with patch.dict("sys.modules", {"openai": None}), pytest.raises(
+            ImportError, match="openai package is required"
+        ):
+            OpenAIBackend(api_key="test")
 
     def test_anthropic_missing_import_raises(self):
         """Test that missing anthropic package raises ImportError."""
@@ -2100,9 +2101,10 @@ class TestBackendErrorHandling:
 
         from ros2_lingua_core import AnthropicBackend
 
-        with patch.dict("sys.modules", {"anthropic": None}):
-            with pytest.raises(ImportError, match="anthropic package is required"):
-                AnthropicBackend(api_key="test")
+        with patch.dict("sys.modules", {"anthropic": None}), pytest.raises(
+            ImportError, match="anthropic package is required"
+        ):
+            AnthropicBackend(api_key="test")
 
     def test_ollama_missing_import_raises(self):
         """Test that missing ollama package raises ImportError."""
@@ -2110,9 +2112,10 @@ class TestBackendErrorHandling:
 
         from ros2_lingua_core import OllamaBackend
 
-        with patch.dict("sys.modules", {"ollama": None}):
-            with pytest.raises(ImportError, match="ollama package is required"):
-                OllamaBackend()
+        with patch.dict("sys.modules", {"ollama": None}), pytest.raises(
+            ImportError, match="ollama package is required"
+        ):
+            OllamaBackend()
 
     def test_mock_backend_fixed_response(self):
         """Test MockBackend returns fixed response."""
@@ -2158,10 +2161,9 @@ class TestBackendErrorHandling:
 
     def test_with_retry_no_retries_when_disabled(self):
         """Test _with_retry when max_retries=0."""
-        from unittest.mock import patch
 
-        from ros2_lingua_core.backends import RetryConfig, _with_retry
         from ros2_lingua_core import LLMTimeoutError
+        from ros2_lingua_core.backends import RetryConfig, _with_retry
 
         def failing_fn():
             raise LLMTimeoutError("timeout")
@@ -2172,10 +2174,9 @@ class TestBackendErrorHandling:
 
     def test_with_retry_respects_retry_on_timeout_flag(self):
         """Test _with_retry skips retry when retry_on_timeout=False."""
-        from unittest.mock import patch
 
-        from ros2_lingua_core.backends import RetryConfig, _with_retry
         from ros2_lingua_core import LLMTimeoutError
+        from ros2_lingua_core.backends import RetryConfig, _with_retry
 
         call_count = 0
 
@@ -2191,8 +2192,8 @@ class TestBackendErrorHandling:
 
     def test_with_retry_respects_retry_on_rate_limit_flag(self):
         """Test _with_retry skips retry when retry_on_rate_limit=False."""
-        from ros2_lingua_core.backends import RetryConfig, _with_retry
         from ros2_lingua_core import LLMRateLimitError
+        from ros2_lingua_core.backends import RetryConfig, _with_retry
 
         call_count = 0
 
@@ -2208,8 +2209,8 @@ class TestBackendErrorHandling:
 
     def test_with_retry_never_retries_auth_error(self):
         """Test _with_retry never retries LLMAuthError."""
-        from ros2_lingua_core.backends import RetryConfig, _with_retry
         from ros2_lingua_core import LLMAuthError
+        from ros2_lingua_core.backends import RetryConfig, _with_retry
 
         call_count = 0
 
@@ -2225,8 +2226,8 @@ class TestBackendErrorHandling:
 
     def test_with_retry_never_retries_model_not_found(self):
         """Test _with_retry never retries LLMModelNotFoundError."""
-        from ros2_lingua_core.backends import RetryConfig, _with_retry
         from ros2_lingua_core import LLMModelNotFoundError
+        from ros2_lingua_core.backends import RetryConfig, _with_retry
 
         call_count = 0
 
@@ -2242,8 +2243,8 @@ class TestBackendErrorHandling:
 
     def test_with_retry_succeeds_after_transient_errors(self):
         """Test _with_retry succeeds after transient backend errors."""
-        from ros2_lingua_core.backends import RetryConfig, _with_retry
         from ros2_lingua_core import LLMBackendError
+        from ros2_lingua_core.backends import RetryConfig, _with_retry
 
         call_count = 0
 

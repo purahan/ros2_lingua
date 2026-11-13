@@ -18,20 +18,18 @@ Run with:
 import json
 import time
 import unittest
-import pytest
 
 import launch
 import launch_ros.actions
 import launch_testing
 import launch_testing.actions
 import launch_testing.markers
-
+import pytest
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
-from ros2_lingua_interfaces.srv import RegisterCapability, GroundInstruction
-
+from ros2_lingua_interfaces.srv import GroundInstruction
 
 # ------------------------------------------------------------------
 # Launch configuration

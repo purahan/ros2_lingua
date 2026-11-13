@@ -33,8 +33,9 @@ Usage:
     )
 """
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, Type
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -53,8 +54,8 @@ class ActionMapping:
     capability_name: str
     action_type: Any
     action_name: str
-    goal_adapter: Callable[[Dict], Any]
-    result_checker: Optional[Callable[[Any], bool]] = None
+    goal_adapter: Callable[[dict], Any]
+    result_checker: Callable[[Any], bool] | None = None
     timeout_sec: float = 30.0
 
 
@@ -74,8 +75,8 @@ class ServiceMapping:
     capability_name: str
     service_type: Any
     service_name: str
-    request_adapter: Callable[[Dict], Any]
-    result_checker: Optional[Callable[[Any], bool]] = None
+    request_adapter: Callable[[dict], Any]
+    result_checker: Callable[[Any], bool] | None = None
     timeout_sec: float = 10.0
 
 
@@ -117,16 +118,16 @@ class DispatchConfig:
     """
 
     def __init__(self):
-        self._actions:   Dict[str, ActionMapping]  = {}
-        self._services:  Dict[str, ServiceMapping] = {}
+        self._actions:   dict[str, ActionMapping]  = {}
+        self._services:  dict[str, ServiceMapping] = {}
 
     def register_action(
         self,
         capability_name: str,
         action_type: Any,
         action_name: str,
-        goal_adapter: Callable[[Dict], Any],
-        result_checker: Optional[Callable[[Any], bool]] = None,
+        goal_adapter: Callable[[dict], Any],
+        result_checker: Callable[[Any], bool] | None = None,
         timeout_sec: float = 30.0,
     ) -> "DispatchConfig":
         """
@@ -150,8 +151,8 @@ class DispatchConfig:
         capability_name: str,
         service_type: Any,
         service_name: str,
-        request_adapter: Callable[[Dict], Any],
-        result_checker: Optional[Callable[[Any], bool]] = None,
+        request_adapter: Callable[[dict], Any],
+        result_checker: Callable[[Any], bool] | None = None,
         timeout_sec: float = 10.0,
     ) -> "DispatchConfig":
         """Register a mapping from a capability to an existing typed service."""
@@ -165,10 +166,10 @@ class DispatchConfig:
         )
         return self
 
-    def get_action(self, capability_name: str) -> Optional[ActionMapping]:
+    def get_action(self, capability_name: str) -> ActionMapping | None:
         return self._actions.get(capability_name)
 
-    def get_service(self, capability_name: str) -> Optional[ServiceMapping]:
+    def get_service(self, capability_name: str) -> ServiceMapping | None:
         return self._services.get(capability_name)
 
     def has(self, capability_name: str) -> bool:

@@ -54,6 +54,19 @@ if(BUILD_TESTING)
     ros2_lingua_interfaces
   )
 
+  ament_add_gtest(test_reregistration test/test_reregistration.cpp TIMEOUT 60)
+  target_include_directories(test_reregistration PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  )
+  target_link_libraries(test_reregistration
+    nlohmann_json::nlohmann_json
+  )
+  ament_target_dependencies(test_reregistration
+    rclcpp
+    std_msgs
+    ros2_lingua_interfaces
+  )
+
   ament_add_gtest(test_compilation test/test_compilation.cpp)
   target_include_directories(test_compilation PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

@@ -10,7 +10,6 @@ import ast
 import unittest
 from pathlib import Path
 
-
 EXPECTED_EXPORTS = {
     "LinguaMixin",
     "LinguaActionServer",
@@ -32,13 +31,16 @@ class TestPackageInit(unittest.TestCase):
         for node in tree.body:
             if isinstance(node, ast.Assign):
                 for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id == "__all__":
-                        if isinstance(node.value, (ast.List, ast.Tuple)):
-                            all_names = {
-                                elt.value
-                                for elt in node.value.elts
-                                if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
-                            }
+                    if (
+                        isinstance(target, ast.Name)
+                        and target.id == "__all__"
+                        and isinstance(node.value, (ast.List, ast.Tuple))
+                    ):
+                        all_names = {
+                            elt.value
+                            for elt in node.value.elts
+                            if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+                        }
             elif isinstance(node, ast.ImportFrom):
                 for alias in node.names:
                     imported.add(alias.asname or alias.name)

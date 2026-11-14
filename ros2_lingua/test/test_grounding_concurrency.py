@@ -7,8 +7,8 @@ import rclpy
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.task import Future
-from ros2_lingua.grounding_node import GroundingNode
 
+from ros2_lingua.grounding_node import GroundingNode
 from ros2_lingua_core import Capability
 from ros2_lingua_interfaces.srv import GroundInstruction, RegisterCapability, UpdateState
 

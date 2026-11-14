@@ -14,9 +14,9 @@ Run with:
 """
 
 import json
+import threading
 import time
 import unittest
-import threading
 
 import launch
 import launch_ros.actions
@@ -24,13 +24,11 @@ import launch_testing
 import launch_testing.actions
 import launch_testing.markers
 import pytest
-
 import rclpy
 from rclpy.node import Node
-
-from ros2_lingua_interfaces.srv import RegisterCapability, GroundInstruction, UpdateState
 from std_msgs.msg import String
 
+from ros2_lingua_interfaces.srv import GroundInstruction, RegisterCapability, UpdateState
 
 # ------------------------------------------------------------------
 # Test capability definitions
@@ -41,13 +39,15 @@ NAVIGATE_CAPABILITY = {
     "description": "Moves the robot to a named location",
     "ros_action": "robot/navigate",
     "ros_service": None,
-    "parameters": [{
-        "name": "location_name",
-        "type": "string",
-        "description": "Where to go",
-        "required": True,
-        "default": None,
-    }],
+    "parameters": [
+        {
+            "name": "location_name",
+            "type": "string",
+            "description": "Where to go",
+            "required": True,
+            "default": None,
+        }
+    ],
     "preconditions": [],
     "postconditions": ["robot_at_location"],
     "metadata": {},
@@ -59,13 +59,15 @@ PICK_CAPABILITY = {
     "description": "Picks up a named object using the robot arm",
     "ros_action": "robot/pick",
     "ros_service": None,
-    "parameters": [{
-        "name": "object_name",
-        "type": "string",
-        "description": "Object to pick up",
-        "required": True,
-        "default": None,
-    }],
+    "parameters": [
+        {
+            "name": "object_name",
+            "type": "string",
+            "description": "Object to pick up",
+            "required": True,
+            "default": None,
+        }
+    ],
     "preconditions": ["robot_at_location"],
     "postconditions": ["object_in_hand"],
     "metadata": {},
@@ -77,13 +79,15 @@ SAY_CAPABILITY = {
     "description": "Speaks a message aloud",
     "ros_action": None,
     "ros_service": "robot/tts",
-    "parameters": [{
-        "name": "message",
-        "type": "string",
-        "description": "What to say",
-        "required": True,
-        "default": None,
-    }],
+    "parameters": [
+        {
+            "name": "message",
+            "type": "string",
+            "description": "What to say",
+            "required": True,
+            "default": None,
+        }
+    ],
     "preconditions": [],
     "postconditions": [],
     "metadata": {},
@@ -107,29 +111,35 @@ STABILIZE_CAPABILITY = {
 # Launch description
 # ------------------------------------------------------------------
 
+
 @pytest.mark.launch_test
 def generate_test_description():
     grounding_node = launch_ros.actions.Node(
         package="ros2_lingua",
         executable="grounding_node",
         name="lingua_grounding_node",
-        parameters=[{
-            "llm_backend": "mock",
-            "llm_model": "mock",
-            "auto_chain": True,
-        }],
+        parameters=[
+            {
+                "llm_backend": "mock",
+                "llm_model": "mock",
+                "auto_chain": True,
+            }
+        ],
         output="screen",
     )
 
-    return launch.LaunchDescription([
-        grounding_node,
-        launch_testing.actions.ReadyToTest(),
-    ])
+    return launch.LaunchDescription(
+        [
+            grounding_node,
+            launch_testing.actions.ReadyToTest(),
+        ]
+    )
 
 
 # ------------------------------------------------------------------
 # Helper node
 # ------------------------------------------------------------------
+
 
 class TestHelperNode(Node):
     def __init__(self):
@@ -137,23 +147,21 @@ class TestHelperNode(Node):
         self._register_client = self.create_client(
             RegisterCapability, "/lingua/register_capability"
         )
-        self._ground_client = self.create_client(
-            GroundInstruction, "/lingua/ground"
-        )
-        self._state_client = self.create_client(
-            UpdateState, "/lingua/update_state"
-        )
+        self._ground_client = self.create_client(GroundInstruction, "/lingua/ground")
+        self._state_client = self.create_client(UpdateState, "/lingua/update_state")
         self._received_plans = []
         self._plan_sub = self.create_subscription(
-            String, "/lingua/current_plan",
-            lambda msg: self._received_plans.append(msg.data), 10,
+            String,
+            "/lingua/current_plan",
+            lambda msg: self._received_plans.append(msg.data),
+            10,
         )
 
     def wait_for_services(self, timeout=15.0) -> bool:
         return (
-            self._register_client.wait_for_service(timeout_sec=timeout) and
-            self._ground_client.wait_for_service(timeout_sec=timeout) and
-            self._state_client.wait_for_service(timeout_sec=timeout)
+            self._register_client.wait_for_service(timeout_sec=timeout)
+            and self._ground_client.wait_for_service(timeout_sec=timeout)
+            and self._state_client.wait_for_service(timeout_sec=timeout)
         )
 
     def register_capability(self, cap_dict: dict, timeout=5.0):
@@ -172,10 +180,12 @@ class TestHelperNode(Node):
 
     def update_state(self, set_tokens=None, clear_tokens=None, timeout=5.0):
         req = UpdateState.Request()
-        req.state_json = json.dumps({
-            "set": set_tokens or [],
-            "clear": clear_tokens or [],
-        })
+        req.state_json = json.dumps(
+            {
+                "set": set_tokens or [],
+                "clear": clear_tokens or [],
+            }
+        )
         future = self._state_client.call_async(req)
         rclpy.spin_until_future_complete(self, future, timeout_sec=timeout)
         return future.result()
@@ -185,8 +195,8 @@ class TestHelperNode(Node):
 # Tests
 # ------------------------------------------------------------------
 
-class TestGroundingPipeline(unittest.TestCase):
 
+class TestGroundingPipeline(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not rclpy.ok():
@@ -194,9 +204,7 @@ class TestGroundingPipeline(unittest.TestCase):
         cls.node = TestHelperNode()
         cls.executor = rclpy.executors.SingleThreadedExecutor()
         cls.executor.add_node(cls.node)
-        cls._spin_thread = threading.Thread(
-            target=cls.executor.spin, daemon=True
-        )
+        cls._spin_thread = threading.Thread(target=cls.executor.spin, daemon=True)
         cls._spin_thread.start()
 
     @classmethod
@@ -318,8 +326,11 @@ class TestGroundingPipeline(unittest.TestCase):
             plan = json.loads(result.plan_json)
             if plan.get("feasible"):
                 registered = {
-                    "navigate_to_location", "pick_up_object",
-                    "say", "stabilize_robot", "bad_cap_no_interface",
+                    "navigate_to_location",
+                    "pick_up_object",
+                    "say",
+                    "stabilize_robot",
+                    "bad_cap_no_interface",
                 }
                 for step in plan.get("steps", []):
                     cap_name = step.get("capability_name", "")
@@ -387,6 +398,7 @@ class TestGroundingPipeline(unittest.TestCase):
 # ------------------------------------------------------------------
 # Post-shutdown checks
 # ------------------------------------------------------------------
+
 
 @launch_testing.post_shutdown_test()
 class TestGroundingNodeShutdown(unittest.TestCase):

@@ -72,11 +72,13 @@ def generate_launch_description():
         executable="grounding_node",
         name="lingua_grounding_node",
         namespace=robot_namespace,
-        parameters=[{
-            "llm_backend": llm_backend,
-            "llm_model": llm_model,
-            "auto_chain": True,
-        }],
+        parameters=[
+            {
+                "llm_backend": llm_backend,
+                "llm_model": llm_model,
+                "auto_chain": True,
+            }
+        ],
         output="screen",
     )
 
@@ -94,88 +96,102 @@ def generate_launch_description():
 
     balance_node = TimerAction(
         period=1.5,
-        actions=[Node(
-            package="ros2_lingua_mock",
-            executable="balance_node",
-            name="mock_balance_node",
-            namespace=robot_namespace,
-            output="screen",
-        )],
+        actions=[
+            Node(
+                package="ros2_lingua_mock",
+                executable="balance_node",
+                name="mock_balance_node",
+                namespace=robot_namespace,
+                output="screen",
+            )
+        ],
     )
 
     navigation_node = TimerAction(
         period=2.0,
-        actions=[Node(
-            package="ros2_lingua_mock",
-            executable="navigation_node",
-            name="mock_navigation_node",
-            namespace=robot_namespace,
-            output="screen",
-        )],
+        actions=[
+            Node(
+                package="ros2_lingua_mock",
+                executable="navigation_node",
+                name="mock_navigation_node",
+                namespace=robot_namespace,
+                output="screen",
+            )
+        ],
     )
 
     manipulation_node = TimerAction(
         period=2.5,
-        actions=[Node(
-            package="ros2_lingua_mock",
-            executable="manipulation_node",
-            name="mock_manipulation_node",
-            namespace=robot_namespace,
-            output="screen",
-        )],
+        actions=[
+            Node(
+                package="ros2_lingua_mock",
+                executable="manipulation_node",
+                name="mock_manipulation_node",
+                namespace=robot_namespace,
+                output="screen",
+            )
+        ],
     )
 
     speech_node = TimerAction(
         period=3.0,
-        actions=[Node(
-            package="ros2_lingua_mock",
-            executable="speech_node",
-            name="mock_speech_node",
-            namespace=robot_namespace,
-            output="screen",
-        )],
+        actions=[
+            Node(
+                package="ros2_lingua_mock",
+                executable="speech_node",
+                name="mock_speech_node",
+                namespace=robot_namespace,
+                output="screen",
+            )
+        ],
     )
 
     # --- Monitor ---
     monitor_node = TimerAction(
         period=3.5,
-        actions=[Node(
-            package="ros2_lingua_mock",
-            executable="robot_monitor",
-            name="robot_monitor",
-            namespace=robot_namespace,
-            output="screen",
-        )],
+        actions=[
+            Node(
+                package="ros2_lingua_mock",
+                executable="robot_monitor",
+                name="robot_monitor",
+                namespace=robot_namespace,
+                output="screen",
+            )
+        ],
     )
 
     # --- Dashboard ---
     dashboard_node = TimerAction(
         period=4.0,
-        actions=[Node(
-            package="ros2_lingua_mock",
-            executable="dashboard_server",
-            name="dashboard_server_node",
-            namespace=robot_namespace,
-            parameters=[{"port": dashboard_port}],
-            output="screen",
-        )],
+        actions=[
+            Node(
+                package="ros2_lingua_mock",
+                executable="dashboard_server",
+                name="dashboard_server_node",
+                namespace=robot_namespace,
+                parameters=[{"port": dashboard_port}],
+                output="screen",
+            )
+        ],
     )
 
-    return LaunchDescription([
-        robot_namespace_arg,
-        llm_backend_arg,
-        llm_model_arg,
-        dashboard_port_arg,
-        allow_demo_mode_arg,
-        LogInfo(msg="NOTE: For OpenAI/Anthropic, export LINGUA_LLM_API_KEY before launching."),
-        LogInfo(msg="Starting ros2_lingua demo system..."),
-        grounding_node,
-        dispatcher_node,
-        balance_node,
-        navigation_node,
-        manipulation_node,
-        speech_node,
-        monitor_node,
-        dashboard_node,
-        LogInfo(msg=["All nodes launched. Dashboard: http://localhost:", dashboard_port]),
-    ])
+    return LaunchDescription(
+        [
+            robot_namespace_arg,
+            llm_backend_arg,
+            llm_model_arg,
+            dashboard_port_arg,
+            allow_demo_mode_arg,
+            LogInfo(msg="NOTE: For OpenAI/Anthropic, export LINGUA_LLM_API_KEY before launching."),
+            LogInfo(msg="Starting ros2_lingua demo system..."),
+            grounding_node,
+            dispatcher_node,
+            balance_node,
+            navigation_node,
+            manipulation_node,
+            speech_node,
+            monitor_node,
+            dashboard_node,
+            LogInfo(msg=["All nodes launched. Dashboard: http://localhost:", dashboard_port]),
+        ]
+    )

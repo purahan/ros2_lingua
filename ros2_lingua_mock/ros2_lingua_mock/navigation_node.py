@@ -19,24 +19,24 @@ import time
 import rclpy
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
-from ros2_lingua.capability_mixin import LinguaMixin
-from ros2_lingua.lingua_action_server import LinguaActionServer
 from std_msgs.msg import String
 
+from ros2_lingua.capability_mixin import LinguaMixin
+from ros2_lingua.lingua_action_server import LinguaActionServer
 from ros2_lingua_core import Capability, CapabilityParameter
 
 # Simulated map of named locations and how long it takes to walk there (seconds)
 LOCATION_WALK_TIMES = {
-    "table":        3.0,
-    "door":         4.0,
-    "shelf":        3.5,
+    "table": 3.0,
+    "door": 4.0,
+    "shelf": 3.5,
     "charging_dock": 5.0,
-    "home":         3.0,
-    "kitchen":      6.0,
-    "window":       4.5,
+    "home": 3.0,
+    "kitchen": 6.0,
+    "window": 4.5,
 }
 
-DEFAULT_WALK_TIME = 4.0   # for locations not in the map
+DEFAULT_WALK_TIME = 4.0  # for locations not in the map
 
 
 class MockNavigationNode(LinguaMixin, LinguaActionServer, Node):
@@ -55,7 +55,7 @@ class MockNavigationNode(LinguaMixin, LinguaActionServer, Node):
         LinguaActionServer.__init__(self, self.CAPABILITIES)
 
         self._current_location = "home"
-        self._arrived = False   # True once a navigation has finished at a location
+        self._arrived = False  # True once a navigation has finished at a location
 
         # --- Publishers ---
         self._log_pub = self.create_publisher(String, "/mock/robot_log", 10)
@@ -65,47 +65,51 @@ class MockNavigationNode(LinguaMixin, LinguaActionServer, Node):
         self._location_timer = self.create_timer(1.0, self._publish_location)
 
         # Register capabilities
-        self.register_lingua_capability(Capability(
-            name="navigate_to_location",
-            description=(
-                "Moves the robot to a named location in the environment. "
-                "The robot must be balanced before navigation can begin."
-            ),
-            ros_action=f"{self.get_name()}/lingua",
-            parameters=[
-                CapabilityParameter(
-                    name="location_name",
-                    type="string",
-                    description=(
-                        "Name of the destination. Known locations: "
-                        + ", ".join(LOCATION_WALK_TIMES.keys())
+        self.register_lingua_capability(
+            Capability(
+                name="navigate_to_location",
+                description=(
+                    "Moves the robot to a named location in the environment. "
+                    "The robot must be balanced before navigation can begin."
+                ),
+                ros_action=f"{self.get_name()}/lingua",
+                parameters=[
+                    CapabilityParameter(
+                        name="location_name",
+                        type="string",
+                        description=(
+                            "Name of the destination. Known locations: "
+                            + ", ".join(LOCATION_WALK_TIMES.keys())
+                        ),
+                        required=True,
                     ),
-                    required=True,
-                ),
-                CapabilityParameter(
-                    name="speed",
-                    type="float",
-                    description="Speed as fraction of maximum (0.1 - 1.0)",
-                    required=False,
-                    default=0.5,
-                ),
-            ],
-            preconditions=["robot_is_balanced"],
-            postconditions=["robot_at_location"],
-            metadata={},
-            tags=["locomotion", "navigation"],
-        ))
+                    CapabilityParameter(
+                        name="speed",
+                        type="float",
+                        description="Speed as fraction of maximum (0.1 - 1.0)",
+                        required=False,
+                        default=0.5,
+                    ),
+                ],
+                preconditions=["robot_is_balanced"],
+                postconditions=["robot_at_location"],
+                metadata={},
+                tags=["locomotion", "navigation"],
+            )
+        )
 
-        self.register_lingua_capability(Capability(
-            name="return_to_home",
-            description="Returns the robot to its home/starting position.",
-            ros_action=f"{self.get_name()}/lingua",
-            parameters=[],
-            preconditions=["robot_is_balanced"],
-            postconditions=["robot_at_location"],
-            metadata={},
-            tags=["locomotion", "navigation"],
-        ))
+        self.register_lingua_capability(
+            Capability(
+                name="return_to_home",
+                description="Returns the robot to its home/starting position.",
+                ros_action=f"{self.get_name()}/lingua",
+                parameters=[],
+                preconditions=["robot_is_balanced"],
+                postconditions=["robot_at_location"],
+                metadata={},
+                tags=["locomotion", "navigation"],
+            )
+        )
 
         self._log(f"MockNavigationNode ready. Starting at: {self._current_location}")
         self.get_logger().info("MockNavigationNode ready.")
@@ -127,7 +131,7 @@ class MockNavigationNode(LinguaMixin, LinguaActionServer, Node):
 
     def _walk_to(self, location: str, goal_handle):
         walk_time = LOCATION_WALK_TIMES.get(location, DEFAULT_WALK_TIME)
-        self._arrived = False   # left the previous location
+        self._arrived = False  # left the previous location
 
         self.get_logger().info(f"Navigation: walking to '{location}'...")
         self._log(f"🚶 Navigating to '{location}' (ETA: {walk_time}s)...")

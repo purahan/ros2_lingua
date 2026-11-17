@@ -21,7 +21,7 @@ ignore = [
 ]
 
 [lint.isort]
-known-first-party = ["ros2_lingua_core"]
+known-first-party = ["ros2_lingua_core", "ros2_lingua", "ros2_lingua_mock", "ros2_lingua_interfaces"]
 
 [format]
 quote-style = "double"

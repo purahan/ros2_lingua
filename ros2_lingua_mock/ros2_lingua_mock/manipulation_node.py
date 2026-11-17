@@ -21,20 +21,20 @@ import time
 import rclpy
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
-from ros2_lingua.capability_mixin import LinguaMixin
-from ros2_lingua.lingua_action_server import LinguaActionServer
 from std_msgs.msg import String
 
+from ros2_lingua.capability_mixin import LinguaMixin
+from ros2_lingua.lingua_action_server import LinguaActionServer
 from ros2_lingua_core import Capability, CapabilityParameter
 
 # Simulated pick durations per object type (seconds)
 OBJECT_PICK_TIMES = {
-    "bottle":   3.5,
-    "cup":      3.0,
-    "book":     2.5,
-    "box":      4.0,
-    "tool":     3.5,
-    "phone":    2.5,
+    "bottle": 3.5,
+    "cup": 3.0,
+    "book": 2.5,
+    "box": 4.0,
+    "tool": 3.5,
+    "phone": 2.5,
 }
 
 DEFAULT_PICK_TIME = 3.0
@@ -55,7 +55,7 @@ class MockManipulationNode(LinguaMixin, LinguaActionServer, Node):
         LinguaMixin.__init__(self)
         LinguaActionServer.__init__(self, self.CAPABILITIES)
 
-        self._held_object = None    # None means arm is free
+        self._held_object = None  # None means arm is free
 
         # --- Publishers ---
         self._log_pub = self.create_publisher(String, "/mock/robot_log", 10)
@@ -67,95 +67,103 @@ class MockManipulationNode(LinguaMixin, LinguaActionServer, Node):
         action_name = f"{self.get_name()}/lingua"
 
         # Register capabilities
-        self.register_lingua_capability(Capability(
-            name="pick_up_object",
-            description=(
-                "Picks up a named object using the robot's arm and gripper. "
-                "The robot must be at the object's location before picking."
-            ),
-            ros_action=action_name,
-            parameters=[
-                CapabilityParameter(
-                    name="object_name",
-                    type="string",
-                    description=(
-                        "Name of the object to pick up. "
-                        "Known objects: " + ", ".join(OBJECT_PICK_TIMES.keys())
+        self.register_lingua_capability(
+            Capability(
+                name="pick_up_object",
+                description=(
+                    "Picks up a named object using the robot's arm and gripper. "
+                    "The robot must be at the object's location before picking."
+                ),
+                ros_action=action_name,
+                parameters=[
+                    CapabilityParameter(
+                        name="object_name",
+                        type="string",
+                        description=(
+                            "Name of the object to pick up. "
+                            "Known objects: " + ", ".join(OBJECT_PICK_TIMES.keys())
+                        ),
+                        required=True,
                     ),
-                    required=True,
-                ),
-                CapabilityParameter(
-                    name="arm",
-                    type="string",
-                    description="Which arm to use: 'left', 'right', or 'auto'",
-                    required=False,
-                    default="auto",
-                ),
-            ],
-            preconditions=["robot_at_location", "object_in_view", "arm_is_free"],
-            postconditions=["object_in_hand"],
-            metadata={"max_payload_kg": 1.5},
-            tags=["manipulation"],
-        ))
+                    CapabilityParameter(
+                        name="arm",
+                        type="string",
+                        description="Which arm to use: 'left', 'right', or 'auto'",
+                        required=False,
+                        default="auto",
+                    ),
+                ],
+                preconditions=["robot_at_location", "object_in_view", "arm_is_free"],
+                postconditions=["object_in_hand"],
+                metadata={"max_payload_kg": 1.5},
+                tags=["manipulation"],
+            )
+        )
 
-        self.register_lingua_capability(Capability(
-            name="place_object",
-            description=(
-                "Places the currently held object on a named surface. "
-                "The robot must be holding something and be at the target location."
-            ),
-            ros_action=action_name,
-            parameters=[
-                CapabilityParameter(
-                    name="surface_name",
-                    type="string",
-                    description="Surface to place the object on, e.g. 'table', 'shelf', 'floor'",
-                    required=True,
+        self.register_lingua_capability(
+            Capability(
+                name="place_object",
+                description=(
+                    "Places the currently held object on a named surface. "
+                    "The robot must be holding something and be at the target location."
                 ),
-            ],
-            preconditions=["object_in_hand", "robot_at_location"],
-            postconditions=["object_placed", "arm_is_free"],
-            metadata={},
-            tags=["manipulation"],
-        ))
+                ros_action=action_name,
+                parameters=[
+                    CapabilityParameter(
+                        name="surface_name",
+                        type="string",
+                        description="Surface to place the object on, e.g. 'table', 'shelf', 'floor'",
+                        required=True,
+                    ),
+                ],
+                preconditions=["object_in_hand", "robot_at_location"],
+                postconditions=["object_placed", "arm_is_free"],
+                metadata={},
+                tags=["manipulation"],
+            )
+        )
 
-        self.register_lingua_capability(Capability(
-            name="wave_hand",
-            description="Waves at a person as a greeting gesture.",
-            ros_action=action_name,
-            parameters=[
-                CapabilityParameter(
-                    name="hand",
-                    type="string",
-                    description="Which hand to wave with: 'left', 'right'",
-                    required=False,
-                    default="right",
-                ),
-            ],
-            preconditions=["robot_is_balanced", "arm_is_free"],
-            postconditions=[],
-            metadata={"social_gesture": True},
-            tags=["manipulation", "social"],
-        ))
+        self.register_lingua_capability(
+            Capability(
+                name="wave_hand",
+                description="Waves at a person as a greeting gesture.",
+                ros_action=action_name,
+                parameters=[
+                    CapabilityParameter(
+                        name="hand",
+                        type="string",
+                        description="Which hand to wave with: 'left', 'right'",
+                        required=False,
+                        default="right",
+                    ),
+                ],
+                preconditions=["robot_is_balanced", "arm_is_free"],
+                postconditions=[],
+                metadata={"social_gesture": True},
+                tags=["manipulation", "social"],
+            )
+        )
 
-        self.register_lingua_capability(Capability(
-            name="open_door",
-            description="Opens a door.",
-            ros_action=action_name,
-            parameters=[
-                CapabilityParameter(
-                    name="door",
-                    type="string",
-                    description="Door to open.",
-                    required=False,
-                    default="nearest",
-                ),
-            ],
-            preconditions=["arm_is_free"],
-            postconditions=[],
-            metadata={},
-            tags=["manipulation"],
-        ))
+        self.register_lingua_capability(
+            Capability(
+                name="open_door",
+                description="Opens a door.",
+                ros_action=action_name,
+                parameters=[
+                    CapabilityParameter(
+                        name="door",
+                        type="string",
+                        description="Door to open.",
+                        required=False,
+                        default="nearest",
+                    ),
+                ],
+                preconditions=["arm_is_free"],
+                postconditions=[],
+                metadata={},
+                tags=["manipulation"],
+            )
+        )
 
         # Report the initial state (arm free, object in view) once registered
         self.publish_lingua_current_state()

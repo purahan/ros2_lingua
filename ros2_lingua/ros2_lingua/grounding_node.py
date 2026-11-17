@@ -28,8 +28,6 @@ from ros2_lingua_core import (
     GroundingEngine,
 )
 from ros2_lingua_core.backends import AnthropicBackend, OllamaBackend, OpenAIBackend
-
-# Custom service types (defined in ros2_lingua_interfaces)
 from ros2_lingua_interfaces.srv import GroundInstruction, RegisterCapability, UpdateState
 
 

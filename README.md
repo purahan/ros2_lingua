@@ -2,12 +2,13 @@
 
 > **Give your robot the ability to understand natural language on any ROS 2 platform.**
 
-[![ROS 2](https://img.shields.io/badge/ROS%202-Humble-blue)](https://docs.ros.org/en/humble/)
+[![ROS 2](https://img.shields.io/badge/ROS%202-Humble%20%7C%20Jazzy-blue)](https://docs.ros.org/en/humble/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue)](./ros2_lingua_cpp)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green)](./LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/purahan/ros2_lingua/ci.yml?branch=main&label=CI)](https://github.com/purahan/ros2_lingua/actions)
-[![Tests](https://img.shields.io/badge/Tests-80%20unit%20%7C%2016%20integration-brightgreen)](./ros2_lingua_core/tests/)
+[![Lint](https://img.shields.io/github/actions/workflow/status/purahan/ros2_lingua/lint.yml?branch=main&label=Lint)](https://github.com/purahan/ros2_lingua/actions)
+[![Unit Tests](https://img.shields.io/github/actions/workflow/status/purahan/ros2_lingua/unit-tests.yml?branch=main&label=Unit%20Tests)](https://github.com/purahan/ros2_lingua/actions)
+[![Integration Tests](https://img.shields.io/github/actions/workflow/status/purahan/ros2_lingua/integration-tests.yml?branch=main&label=Integration%20Tests)](https://github.com/purahan/ros2_lingua/actions)
 [![Release](https://img.shields.io/github/v/release/purahan/ros2_lingua)](https://github.com/purahan/ros2_lingua/releases)
 [![Issues](https://img.shields.io/github/issues/purahan/ros2_lingua)](https://github.com/purahan/ros2_lingua/issues)
 
@@ -136,9 +137,9 @@ Most LLM-to-robot integrations today are one-off scripts i.e. they hardcode topi
 
 ## Prerequisites
 
-- ROS 2 Humble (Ubuntu 22.04)
+- ROS 2 Humble (Ubuntu 22.04) or Jazzy (Ubuntu 24.04)
 - Python 3.10+
-- C++17 (included with Humble's toolchain that is needed only for `ros2_lingua_cpp`)
+- C++17 (included with ROS 2's toolchain, needed only for `ros2_lingua_cpp`)
 - `rosbridge_suite` (for the web dashboard)
 - At least one LLM backend:
   - [Ollama](https://ollama.com/), recommended for local use, no API key needed
@@ -273,10 +274,8 @@ navigate = Capability(
     # Identity: used in plans and LLM prompts
     name="navigate_to_location",
     description="Moves the robot to a named location. Known locations: table, door, dock.",
-
     # ROS 2 interface: exactly one of these
     ros_action="robot/navigate_to_pose",  # or ros_service=
-
     # Input parameters
     parameters=[
         CapabilityParameter(
@@ -286,13 +285,10 @@ navigate = Capability(
             required=True,
         ),
     ],
-
     # Preconditions: must be true before this can run
     preconditions=["robot_is_balanced"],
-
     # Postconditions: become true after this runs
     postconditions=["robot_at_location"],
-
     # Tags: for filtering and categorization
     tags=[Tags.LOCOMOTION, Tags.NAVIGATION],
 )
@@ -324,23 +320,23 @@ from ros2_lingua_core import CapabilityRegistry
 registry = CapabilityRegistry()
 
 # --- Registration ---
-registry.register(navigate)        # raises DuplicateCapabilityError if already registered
-registry.update(navigate)          # register or silently overwrite
+registry.register(navigate)  # raises DuplicateCapabilityError if already registered
+registry.update(navigate)  # register or silently overwrite
 registry.unregister("navigate_to_location")
 
 # --- Querying ---
 registry.get("navigate_to_location")
 registry.get_all()
 registry.get_by_tag("locomotion")
-registry.get_by_tags(["locomotion", "manipulation"], match="any")   # default
-registry.get_by_tags(["manipulation", "social"],    match="all")
-registry.get_all_tags()    # sorted unique tag list across all capabilities
-registry.get_untagged()    # capabilities with no tags
+registry.get_by_tags(["locomotion", "manipulation"], match="any")  # default
+registry.get_by_tags(["manipulation", "social"], match="all")
+registry.get_all_tags()  # sorted unique tag list across all capabilities
+registry.get_untagged()  # capabilities with no tags
 
 # --- State management ---
 registry.set_state("robot_is_balanced")
 registry.clear_state("robot_is_balanced")
-registry.get_state()                       # returns current Set[str]
+registry.get_state()  # returns current Set[str]
 registry.is_satisfied(["robot_is_balanced"])
 ```
 
@@ -364,7 +360,7 @@ retry = RetryConfig(
 engine = GroundingEngine(
     registry=registry,
     backend=OllamaBackend(model="llama3.1", retry=retry),
-    auto_chain=True,    # insert prerequisites automatically (default: True)
+    auto_chain=True,  # insert prerequisites automatically (default: True)
 )
 
 # Ground an instruction
@@ -407,10 +403,7 @@ The planner automatically resolves capability prerequisites without you hardcodi
 
 # Current robot state: {"arm_is_free"}  ← "robot_is_balanced" NOT yet true
 
-chain = registry.resolve_chain(
-    "pick_up_object",
-    current_state={"arm_is_free"}
-)
+chain = registry.resolve_chain("pick_up_object", current_state={"arm_is_free"})
 # → [stabilize_robot, navigate, pick_up_object]
 # stabilize_robot was auto-inserted because navigate required robot_is_balanced
 ```
@@ -447,12 +440,13 @@ from rclpy.node import Node
 from ros2_lingua import LinguaMixin
 from my_robot.capabilities import NAVIGATE
 
+
 class MyNavigationNode(LinguaMixin, Node):
     def __init__(self):
         Node.__init__(self, "my_navigation_node")
         LinguaMixin.__init__(self)
         # ... your existing __init__ code ...
-        self.register_lingua_capability(NAVIGATE)   # ← this is all it takes
+        self.register_lingua_capability(NAVIGATE)  # ← this is all it takes
 ```
 
 ### Step 3: Subclass the dispatcher
@@ -460,6 +454,7 @@ class MyNavigationNode(LinguaMixin, Node):
 ```python
 from ros2_lingua.dispatcher_node import DispatcherNode
 from my_robot_interfaces.action import NavigateTo
+
 
 class MyRobotDispatcher(DispatcherNode):
     def _call_action(self, action_name, cap_name, params):
@@ -613,10 +608,11 @@ backend = MockBackend()
 retry = RetryConfig(max_retries=5, base_delay_sec=2.0, backoff_factor=2.0)
 backend = OllamaBackend(model="llama3.1", retry=retry)
 
+
 # Custom backend: implement one method
 class MyBackend:
     def complete(self, messages: list[dict]) -> str:
-        return my_llm_call(messages)   # return the response string
+        return my_llm_call(messages)  # return the response string
 ```
 
 `RetryConfig` controls provider retries for transient errors. The OpenAI and Anthropic SDK retries are disabled so they do not multiply this count. `GroundingEngine` uses `max_retries`, `retry_delay`, and `retry_backoff` only when a response is not valid JSON. Authentication and model-not-found errors are not retried; `ground()` returns an infeasible `ActionPlan` with the backend error in its reason.
@@ -637,16 +633,16 @@ class MyBackend:
 
 ```python
 from ros2_lingua_core import (
-    LinguaError,                    # base: catch all ros2_lingua errors
-    LLMBackendError,                # any LLM connectivity problem
-    LLMAuthError,                   # backend rejected credentials or permissions
-    LLMTimeoutError,                # LLM took too long
-    LLMRateLimitError,              # API rate limit hit
-    LLMModelNotFoundError,          # model doesn't exist on this backend
-    HallucinationError,             # LLM referenced an unknown capability
-    UnsatisfiablePreconditionError, # backward chainer could not resolve deps
-    StepTimeoutError,               # dispatcher step timed out
-    StepFailedError,                # dispatcher step returned failure
+    LinguaError,  # base: catch all ros2_lingua errors
+    LLMBackendError,  # any LLM connectivity problem
+    LLMAuthError,  # backend rejected credentials or permissions
+    LLMTimeoutError,  # LLM took too long
+    LLMRateLimitError,  # API rate limit hit
+    LLMModelNotFoundError,  # model doesn't exist on this backend
+    HallucinationError,  # LLM referenced an unknown capability
+    UnsatisfiablePreconditionError,  # backward chainer could not resolve deps
+    StepTimeoutError,  # dispatcher step timed out
+    StepFailedError,  # dispatcher step returned failure
 )
 
 try:
@@ -750,20 +746,26 @@ You can also use the grounding engine directly in a Python script (no ROS 2 proc
 
 ```python
 import sys
+
 sys.path.insert(0, "path/to/ros2_lingua_core")
 
 from ros2_lingua_core import (
-    Capability, CapabilityParameter, CapabilityRegistry,
-    GroundingEngine, OllamaBackend,
+    Capability,
+    CapabilityParameter,
+    CapabilityRegistry,
+    GroundingEngine,
+    OllamaBackend,
 )
 
 registry = CapabilityRegistry()
-registry.register(Capability(
-    name="navigate",
-    description="Moves robot to named location",
-    ros_action="robot/navigate",
-    parameters=[CapabilityParameter("location", "string", "Destination name")],
-))
+registry.register(
+    Capability(
+        name="navigate",
+        description="Moves robot to named location",
+        ros_action="robot/navigate",
+        parameters=[CapabilityParameter("location", "string", "Destination name")],
+    )
+)
 
 plan = GroundingEngine(registry, OllamaBackend("llama3.1")).ground("go to the kitchen")
 print(plan.to_json())

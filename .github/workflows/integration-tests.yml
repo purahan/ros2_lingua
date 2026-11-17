@@ -18,11 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - ros_distro: humble
-            os: ubuntu-22.04
-          - ros_distro: jazzy
-            os: ubuntu-24.04
+        ros_distro: [humble, jazzy]
 
     # Use the official ROS Docker image — it has everything pre-installed.
     container:

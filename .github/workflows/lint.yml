@@ -31,10 +31,11 @@ jobs:
           pip install -e "ros2_lingua_core[dev]"
 
       # ruff replaces flake8 + isort + pyupgrade — much faster.
+      # Check all Python packages: core, ROS 2 interface, mock, examples
       - name: ruff (lint + format check)
         run: |
-          ruff check ros2_lingua_core/
-          ruff format --check ros2_lingua_core/
+          ruff check ros2_lingua_core/ ros2_lingua/ ros2_lingua_mock/ examples/
+          ruff format --check ros2_lingua_core/ ros2_lingua/ ros2_lingua_mock/ examples/
 
       # Type checking — starts permissive, tighten over time in mypy.ini.
       - name: mypy (type check)

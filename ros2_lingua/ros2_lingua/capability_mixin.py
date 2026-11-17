@@ -41,17 +41,12 @@ class LinguaMixin:
         self._lingua_register_client = self.create_client(
             RegisterCapability, "lingua/register_capability"
         )
-        self._lingua_state_client = self.create_client(
-            UpdateState, "lingua/update_state"
-        )
+        self._lingua_state_client = self.create_client(UpdateState, "lingua/update_state")
         self._registered_capabilities = []
         self._reregister_timer = None
 
         self._reregister_sub = self.create_subscription(
-            Empty,
-            "lingua/request_reregister",
-            self._handle_reregister_request,
-            10
+            Empty, "lingua/request_reregister", self._handle_reregister_request, 10
         )
 
     def _is_spinning(self) -> bool:
@@ -75,7 +70,9 @@ class LinguaMixin:
         if self._reregister_timer is not None:
             return  # a re-registration is already scheduled
 
-        self.get_logger().info("[Lingua] Grounding node requested re-registration. Re-registering capabilities...")
+        self.get_logger().info(
+            "[Lingua] Grounding node requested re-registration. Re-registering capabilities..."
+        )
         # Defer to a one-shot timer so this subscription callback returns immediately
         self._reregister_timer = self.create_timer(0.1, self._reregister_all)
 
@@ -100,7 +97,9 @@ class LinguaMixin:
     def publish_lingua_current_state(self) -> bool:
         """Send lingua_current_state() to the GroundingNode."""
         set_tokens, clear_tokens = self.lingua_current_state()
-        return self.update_lingua_state(set_tokens=list(set_tokens), clear_tokens=list(clear_tokens))
+        return self.update_lingua_state(
+            set_tokens=list(set_tokens), clear_tokens=list(clear_tokens)
+        )
 
     def register_lingua_capability(
         self,
@@ -177,15 +176,15 @@ class LinguaMixin:
 
         future.add_done_callback(_on_done)
 
-    def _execute_registration(self, capability: Capability, wait_timeout: float, max_retries: int) -> bool:
+    def _execute_registration(
+        self, capability: Capability, wait_timeout: float, max_retries: int
+    ) -> bool:
         """Internal helper to execute the registration with retries (node not spinning yet)."""
         logger = self.get_logger()
         delay = 1.0
 
         for attempt in range(1, max_retries + 1):
-            if not self._lingua_register_client.wait_for_service(
-                timeout_sec=wait_timeout
-            ):
+            if not self._lingua_register_client.wait_for_service(timeout_sec=wait_timeout):
                 if attempt < max_retries:
                     logger.warn(
                         f"[Lingua] lingua/register_capability not available "
@@ -193,7 +192,7 @@ class LinguaMixin:
                         f"Retrying in {delay:.0f}s..."
                     )
                     time.sleep(delay)
-                    delay *= 2.0   # exponential backoff
+                    delay *= 2.0  # exponential backoff
                     continue
                 else:
                     logger.error(
@@ -207,9 +206,7 @@ class LinguaMixin:
             request.capability_json = capability.to_json()
 
             future = self._lingua_register_client.call_async(request)
-            rclpy.spin_until_future_complete(
-                self, future, timeout_sec=wait_timeout
-            )
+            rclpy.spin_until_future_complete(self, future, timeout_sec=wait_timeout)
 
             if future.result() is None:
                 if attempt < max_retries:
@@ -233,10 +230,9 @@ class LinguaMixin:
                 return True
             else:
                 logger.error(
-                    f"[Lingua] Registration rejected for '{capability.name}': "
-                    f"{result.message}"
+                    f"[Lingua] Registration rejected for '{capability.name}': {result.message}"
                 )
-                return False   # Rejection is not worth retrying
+                return False  # Rejection is not worth retrying
 
         return False
 
@@ -269,13 +265,15 @@ class LinguaMixin:
             clear_tokens = []
 
         if not set_tokens and not clear_tokens:
-            return True   # no-op
+            return True  # no-op
 
         request = UpdateState.Request()
-        request.state_json = json.dumps({
-            "set": set_tokens,
-            "clear": clear_tokens,
-        })
+        request.state_json = json.dumps(
+            {
+                "set": set_tokens,
+                "clear": clear_tokens,
+            }
+        )
 
         if self._is_spinning():
             if not self._lingua_state_client.service_is_ready():
@@ -300,10 +298,7 @@ class LinguaMixin:
         rclpy.spin_until_future_complete(self, future, timeout_sec=timeout_sec)
 
         if future.result() is None:
-            logger.warn(
-                f"[Lingua] State update timed out. "
-                f"set={set_tokens}, clear={clear_tokens}"
-            )
+            logger.warn(f"[Lingua] State update timed out. set={set_tokens}, clear={clear_tokens}")
             return False
 
         result = future.result()

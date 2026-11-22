@@ -680,7 +680,7 @@ except LinguaError as e:
 
 | Topic | Msg Type | Rate | Description |
 |---|---|---|---|
-| `/lingua/current_plan` | `std_msgs/String` | on change | Latest `ActionPlan` as JSON |
+| `/lingua/current_plan` | `std_msgs/String` | on change | Latest `ActionPlan` as JSON, plus `state`: the symbolic state when it was published |
 | `/lingua/capabilities` | `std_msgs/String` | 5 Hz | All registered capabilities as JSON |
 | `/lingua/execution_status` | `ExecutionStatus` | on change | Step-by-step execution progress |
 

@@ -10,6 +10,7 @@ It also handles:
 - Dependency resolution (chaining capabilities via pre/postconditions)
 """
 
+from collections.abc import Iterable
 from threading import RLock
 
 from .schema import Capability
@@ -146,6 +147,17 @@ class CapabilityRegistry:
         """Replace the entire state set."""
         with self._lock:
             self._state = set(tokens)
+
+    def apply_state_changes(
+        self, set_tokens: Iterable[str] = (), clear_tokens: Iterable[str] = ()
+    ) -> None:
+        """
+        Mark set_tokens true and clear_tokens false in one step, leaving
+        every other token as it is. A token in both is cleared.
+        """
+        with self._lock:
+            self._state.update(set_tokens)
+            self._state.difference_update(clear_tokens)
 
     def get_state(self) -> set[str]:
         with self._lock:

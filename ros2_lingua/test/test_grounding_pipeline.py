@@ -359,6 +359,7 @@ class TestGroundingPipeline(unittest.TestCase):
         so the dispatcher can pick it up.
         """
         self.node.register_capability(SAY_CAPABILITY)
+        self.assertIsNotNone(self.node.update_state(set_tokens=["plan_snapshot_token"]))
         initial_count = len(self.node._received_plans)
 
         result = self.node.ground("say welcome to ROScon")
@@ -371,6 +372,9 @@ class TestGroundingPipeline(unittest.TestCase):
                 initial_count,
                 "/lingua/current_plan must receive a message after successful grounding",
             )
+            # The published plan carries a snapshot of the symbolic state (issue #35)
+            published = json.loads(self.node._received_plans[-1])
+            self.assertIn("plan_snapshot_token", published.get("state", []))
 
     # ── Robustness ────────────────────────────────────────────────
 

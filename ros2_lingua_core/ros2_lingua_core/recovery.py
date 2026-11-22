@@ -20,6 +20,7 @@ Design:
 """
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -158,17 +159,23 @@ class RecoveryPlanner:
         current_state: set[str],
         error: str = "",
         tag_filter: list[str] | None = None,
+        state_clear: Iterable[str] | None = None,
     ) -> RecoveryDecision:
         """
         Decide what to do after a step failure.
+
+        Before replanning, the registry is updated with current_state and
+        state_clear as a diff: those tokens are set and cleared, and every
+        other token in the registry is kept.
 
         Args:
             failed_step:          The step dict that failed (capability_name, parameters).
             step_index:           Index of the failed step in the plan.
             original_instruction: The natural language instruction being executed.
-            current_state:        Current symbolic state of the robot.
+            current_state:        Symbolic state tokens known to be true.
             error:                Error message from the failure.
             tag_filter:           Tag filter used in the original grounding call.
+            state_clear:          Tokens the plan has made false since it started.
 
         Returns:
             A RecoveryDecision with the recommended strategy.
@@ -205,10 +212,11 @@ class RecoveryPlanner:
                     f"'{cap_name}' failed. State: {current_state}"
                 )
                 try:
-                    # Sync registry state so the backward chainer sees
-                    # which postconditions are already satisfied
+                    # Sync registry state so the backward chainer sees which
+                    # postconditions are already satisfied. Apply a diff: replacing
+                    # the state would drop tokens that were true before the plan.
                     if self._registry is not None:
-                        self._registry.update_state(current_state)
+                        self._registry.apply_state_changes(current_state, state_clear or ())
                     new_plan = self._engine.ground(original_instruction, tag_filter=tag_filter)
                     if new_plan.feasible and new_plan.steps:
                         self._retry_counts.clear()

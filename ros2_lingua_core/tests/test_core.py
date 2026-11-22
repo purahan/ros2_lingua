@@ -140,6 +140,13 @@ class TestCapabilityRegistry:
         r.clear_state("robot_is_balanced")
         assert "robot_is_balanced" not in r.get_state()
 
+    def test_apply_state_changes_keeps_other_tokens(self):
+        r = CapabilityRegistry()
+        r.update_state({"battery_ok", "door_open"})
+        r.apply_state_changes(set_tokens=["at_table", "both"], clear_tokens=["door_open", "both"])
+        # A token in both lists is cleared, as on the grounding node.
+        assert r.get_state() == {"battery_ok", "at_table"}
+
     def test_preconditions_satisfied(self, registry):
         registry.set_state("robot_is_balanced")
         assert registry.is_satisfied(["robot_is_balanced"]) is True
@@ -2235,6 +2242,59 @@ class TestRecoveryPlanner:
         assert decision.strategy == "replan"
         assert len(decision.new_plan.steps) == 1
         assert decision.new_plan.steps[0].capability_name == "pick_up_object"
+
+    # ── Replan keeps the registry's state (issue #35) ─────────
+
+    _PICK = {
+        "capability_name": "pick_up_object",
+        "parameters": {"object_name": "cup"},
+        "rationale": "pick",
+    }
+
+    def _replan(self, registry, current_state, state_clear=None, steps=None):
+        from ros2_lingua_core import RecoveryConfig, RecoveryPlanner
+
+        engine = self._make_engine(registry, steps or [self._PICK])
+        planner = RecoveryPlanner(
+            RecoveryConfig(max_retries=0, enable_replan=True),
+            grounding_engine=engine,
+            registry=registry,
+        )
+        return planner.on_step_failed(
+            self._failed_step("pick_up_object", {"object_name": "cup"}),
+            0,
+            "pick up the cup",
+            current_state,
+            "gripper fault",
+            state_clear=state_clear,
+        )
+
+    def test_replan_keeps_state_from_before_the_plan(self):
+        registry = self._make_registry()
+        registry.set_state("battery_ok")
+        decision = self._replan(registry, set())
+        assert decision.strategy == "replan"
+        assert registry.get_state() == {"battery_ok"}
+
+    def test_replan_applies_plan_changes_as_a_diff(self):
+        registry = self._make_registry()
+        registry.apply_state_changes({"battery_ok", "robot_at_location"})
+        navigate = {
+            "capability_name": "navigate_to_location",
+            "parameters": {"location_name": "table"},
+            "rationale": "go back",
+        }
+        decision = self._replan(
+            registry,
+            {"robot_is_balanced"},
+            state_clear={"robot_at_location"},
+            steps=[navigate, self._PICK],
+        )
+        assert decision.strategy == "replan"
+        assert registry.get_state() == {"battery_ok", "robot_is_balanced"}
+        # robot_is_balanced is set, so the chainer adds no stabilize_robot step.
+        names = [s.capability_name for s in decision.new_plan.steps]
+        assert names == ["navigate_to_location", "pick_up_object"]
 
 
 # ------------------------------------------------------------------

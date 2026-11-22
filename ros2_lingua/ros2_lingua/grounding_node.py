@@ -169,9 +169,12 @@ class GroundingNode(Node):
             response.message = plan.reason if not plan.feasible else "OK"
 
             if plan.feasible:
-                # Publish for the dispatcher node
+                # Publish for the dispatcher node, with a snapshot of the symbolic
+                # state so the dispatcher's view of it starts from the real state.
+                published = plan.to_dict()
+                published["state"] = sorted(self._registry.get_state())
                 msg = String()
-                msg.data = plan_json
+                msg.data = json.dumps(published, indent=2)
                 self._plan_pub.publish(msg)
                 self.get_logger().info(f"Plan generated: {len(plan.steps)} step(s).")
             else:
@@ -192,10 +195,7 @@ class GroundingNode(Node):
             set_tokens = set(state_data.get("set", []))
             clear_tokens = set(state_data.get("clear", []))
 
-            for token in set_tokens:
-                self._registry.set_state(token)
-            for token in clear_tokens:
-                self._registry.clear_state(token)
+            self._registry.apply_state_changes(set_tokens, clear_tokens)
 
             response.success = True
             response.message = f"State updated. Set: {set_tokens}, Cleared: {clear_tokens}"

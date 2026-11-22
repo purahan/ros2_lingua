@@ -139,6 +139,11 @@ class DispatcherNode(Node):
         # Capability cache from registry broadcast
         self._capability_map = {}
 
+        # Symbolic state as seen by the running plan (worker thread only):
+        # tokens known true, and tokens the plan has cleared since it started.
+        self._plan_state: set[str] = set()
+        self._plan_cleared: set[str] = set()
+
         # --- Plan worker ---
         # _pending_plan holds the newest plan not yet started (latest wins).
         # _cancel_event is set to stop the running plan.
@@ -267,8 +272,14 @@ class DispatcherNode(Node):
         if self._recovery_planner:
             self._recovery_planner.reset()
 
-        # Track current symbolic state for recovery replanning
-        current_state = set()
+        # Track the symbolic state for recovery replanning. Start from the snapshot
+        # the grounding node publishes with the plan; _update_state keeps it current.
+        snapshot = plan_data.get("state", [])
+        if not isinstance(snapshot, list) or not all(isinstance(t, str) for t in snapshot):
+            self.get_logger().warn("Plan has an invalid 'state' snapshot; ignoring it.")
+            snapshot = []
+        self._plan_state = set(snapshot)
+        self._plan_cleared = set()
 
         i = 0
         while i < len(steps):
@@ -294,8 +305,6 @@ class DispatcherNode(Node):
 
             if state_set or state_clear:
                 self._update_state(state_set, state_clear)
-                current_state.update(state_set)
-                current_state -= set(state_clear)
 
             if success:
                 self._publish_status("STEP_COMPLETE", step=cap_name, instruction=instruction)
@@ -314,9 +323,10 @@ class DispatcherNode(Node):
                 failed_step=step,
                 step_index=i,
                 original_instruction=instruction,
-                current_state=current_state,
+                current_state=set(self._plan_state),
                 error=f"Step '{cap_name}' returned failure",
                 tag_filter=tag_filter,
+                state_clear=set(self._plan_cleared),
             )
 
             if decision.strategy == "retry":
@@ -732,7 +742,15 @@ class DispatcherNode(Node):
     # ------------------------------------------------------------------
 
     def _update_state(self, set_tokens: list, clear_tokens: list) -> None:
-        """Push state token updates back to the GroundingNode."""
+        """
+        Record state token updates for the running plan and push them to the
+        GroundingNode. A token in both lists is cleared, as on the GroundingNode.
+        """
+        self._plan_state.update(set_tokens)
+        self._plan_state.difference_update(clear_tokens)
+        self._plan_cleared.update(clear_tokens)
+        self._plan_cleared.difference_update(set(set_tokens) - set(clear_tokens))
+
         if not self._state_client.wait_for_service(timeout_sec=2.0):
             self.get_logger().warn("lingua/update_state not available — state update skipped.")
             return

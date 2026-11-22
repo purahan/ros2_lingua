@@ -464,49 +464,87 @@ class GroundingEngine:
         For each step in the plan, check if its preconditions are met.
         If not, use the registry's backward chainer to prepend the
         necessary prerequisite steps.
+
+        Inserted steps get their parameter defaults filled in. The plan is
+        infeasible if an inserted step has a required parameter (there is
+        no value to give it), or if a precondition is only produced by a
+        later step of the LLM's own plan (the plan is out of order; it is
+        not reordered, because that can change what the plan does).
         """
+
+        def infeasible(reason: str) -> ActionPlan:
+            return ActionPlan(
+                steps=[],
+                original_instruction=instruction,
+                feasible=False,
+                reason=reason,
+            )
+
+        # Inserted steps are always checked, even with validate_params=False:
+        # their parameters come from the engine, not from the LLM.
+        validator = self._validator or ParameterValidator()
         current_state = self._registry.get_state()
         final_steps: list[ActionStep] = []
 
-        for step in plan.steps:
+        for index, step in enumerate(plan.steps):
             cap = self._registry.get(step.capability_name)
             if cap is None:
                 continue
 
-            # Check if preconditions need satisfying
-            unsatisfied = [p for p in cap.preconditions if p not in current_state]
-            if unsatisfied:
+            if any(p not in current_state for p in cap.preconditions):
                 try:
                     chain = self._registry.resolve_chain(
                         step.capability_name, current_state=set(current_state)
                     )
-                    # Prepend all prerequisite steps (exclude the goal itself,
-                    # which is already in our plan as 'step')
-                    for prerequisite_cap in chain[:-1]:
-                        already_planned = any(
-                            s.capability_name == prerequisite_cap.name for s in final_steps
-                        )
-                        if not already_planned:
-                            final_steps.append(
-                                ActionStep(
-                                    capability_name=prerequisite_cap.name,
-                                    parameters={},  # will use defaults
-                                    rationale=f"Auto-inserted prerequisite for '{step.capability_name}'",
-                                )
-                            )
                 except (ValueError, RecursionError) as e:
-                    return ActionPlan(
-                        steps=[],
-                        original_instruction=instruction,
-                        feasible=False,
-                        reason=str(e),
+                    return infeasible(str(e))
+
+                # Tokens the chain had to produce, in the order they were needed.
+                needed: list[str] = []
+                for chain_cap in chain:
+                    for token in chain_cap.preconditions:
+                        if token not in current_state and token not in needed:
+                            needed.append(token)
+
+                for later_index in range(index + 1, len(plan.steps)):
+                    later_name = plan.steps[later_index].capability_name
+                    later_cap = self._registry.get(later_name)
+                    if later_cap is None:
+                        continue
+                    late_tokens = [t for t in needed if t in later_cap.postconditions]
+                    if late_tokens:
+                        return infeasible(
+                            f"Plan is out of order: '{step.capability_name}' "
+                            f"(step {index + 1}) needs '{late_tokens[0]}', which the plan "
+                            f"only produces later, in '{later_name}' (step {later_index + 1})."
+                        )
+
+                # Prepend the prerequisites (the goal itself is 'step').
+                for prerequisite_cap in chain[:-1]:
+                    try:
+                        parameters = validator.validate(prerequisite_cap, {})
+                    except ParameterValidationError:
+                        # With no input, the only possible failures are missing required params.
+                        missing = ", ".join(
+                            f"'{p.name}'" for p in prerequisite_cap.parameters if p.required
+                        )
+                        return infeasible(
+                            f"Auto-inserted prerequisite '{prerequisite_cap.name}' "
+                            f"(needed by '{step.capability_name}') is missing required "
+                            f"parameter(s): {missing}. Include '{prerequisite_cap.name}' "
+                            "with its parameters in the plan."
+                        )
+                    final_steps.append(
+                        ActionStep(
+                            capability_name=prerequisite_cap.name,
+                            parameters=parameters,
+                            rationale=f"Auto-inserted prerequisite for '{step.capability_name}'",
+                        )
                     )
+                    current_state.update(prerequisite_cap.postconditions)
 
             final_steps.append(step)
-
-            # Update simulated state with postconditions
-            for token in cap.postconditions:
-                current_state.add(token)
+            current_state.update(cap.postconditions)
 
         plan.steps = final_steps
         return plan

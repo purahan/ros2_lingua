@@ -438,6 +438,167 @@ class TestGroundingEngine:
         assert "stabilize_robot" in names
         assert names.index("stabilize_robot") < names.index("navigate_to_location")
 
+
+class TestAutoChainValidation:
+    """Auto-inserted prerequisite steps are validated like LLM steps (issue #31)."""
+
+    @staticmethod
+    def _plan(*steps):
+        return json.dumps(
+            {
+                "feasible": True,
+                "reason": "",
+                "steps": [
+                    {"capability_name": name, "parameters": params, "rationale": ""}
+                    for name, params in steps
+                ],
+            }
+        )
+
+    @staticmethod
+    def _charging_registry(station_required=True):
+        r = CapabilityRegistry()
+        r.register(
+            Capability(
+                name="dock",
+                description="Docks at a charging station",
+                ros_action="robot/dock",
+                parameters=[
+                    CapabilityParameter(
+                        "station",
+                        "string",
+                        "Which station",
+                        required=station_required,
+                        default=None if station_required else "station_a",
+                    ),
+                    CapabilityParameter("speed", "float", "Approach speed", False, 0.2),
+                ],
+                postconditions=["docked"],
+            )
+        )
+        r.register(
+            Capability(
+                name="charge",
+                description="Charges the battery",
+                ros_action="robot/charge",
+                preconditions=["docked"],
+                postconditions=["charged"],
+            )
+        )
+        return r
+
+    def test_missing_required_param_makes_plan_infeasible(self):
+        engine = GroundingEngine(self._charging_registry(), MockBackend(self._plan(("charge", {}))))
+        plan = engine.ground("charge the battery")
+        assert plan.feasible is False
+        assert plan.steps == []
+        assert "'dock'" in plan.reason
+        assert "'station'" in plan.reason
+        assert "'charge'" in plan.reason
+
+    def test_missing_required_param_rejected_without_validate_params(self):
+        engine = GroundingEngine(
+            self._charging_registry(),
+            MockBackend(self._plan(("charge", {}))),
+            validate_params=False,
+        )
+        plan = engine.ground("charge the battery")
+        assert plan.feasible is False
+        assert "'station'" in plan.reason
+
+    def test_inserted_step_gets_defaults(self):
+        engine = GroundingEngine(
+            self._charging_registry(station_required=False),
+            MockBackend(self._plan(("charge", {}))),
+        )
+        plan = engine.ground("charge the battery")
+        assert plan.feasible is True
+        assert [s.capability_name for s in plan.steps] == ["dock", "charge"]
+        assert plan.steps[0].parameters == {"station": "station_a", "speed": 0.2}
+
+    def test_llm_supplied_prerequisite_is_not_duplicated(self):
+        engine = GroundingEngine(
+            self._charging_registry(),
+            MockBackend(self._plan(("dock", {"station": "b"}), ("charge", {}))),
+        )
+        plan = engine.ground("dock at b and charge")
+        assert plan.feasible is True
+        assert [s.capability_name for s in plan.steps] == ["dock", "charge"]
+        assert plan.steps[0].parameters["station"] == "b"
+
+    def test_inserted_postconditions_are_tracked(self):
+        # 'prepare' produces both tokens. 'other' also produces 'calibrated' and is
+        # registered first, so if the state ignored prepare's postconditions, the
+        # chainer would insert 'other' before 'measure' as well.
+        r = CapabilityRegistry()
+        r.register(
+            Capability(
+                name="other", description="d", ros_action="a/o", postconditions=["calibrated"]
+            )
+        )
+        r.register(
+            Capability(
+                name="prepare",
+                description="d",
+                ros_action="a/p",
+                postconditions=["powered", "calibrated"],
+            )
+        )
+        r.register(
+            Capability(name="move", description="d", ros_action="a/m", preconditions=["powered"])
+        )
+        r.register(
+            Capability(
+                name="measure", description="d", ros_action="a/s", preconditions=["calibrated"]
+            )
+        )
+        engine = GroundingEngine(r, MockBackend(self._plan(("move", {}), ("measure", {}))))
+        plan = engine.ground("move then measure")
+        assert plan.feasible is True
+        assert [s.capability_name for s in plan.steps] == ["prepare", "move", "measure"]
+
+    def test_producer_later_in_plan_is_out_of_order(self, registry):
+        engine = GroundingEngine(
+            registry,
+            MockBackend(
+                self._plan(
+                    ("navigate_to_location", {"location_name": "table"}),
+                    ("stabilize_robot", {}),
+                )
+            ),
+        )
+        plan = engine.ground("go to the table")
+        assert plan.feasible is False
+        assert plan.steps == []
+        assert "out of order" in plan.reason
+        assert "'robot_is_balanced'" in plan.reason
+        assert "'stabilize_robot' (step 2)" in plan.reason
+
+    def test_indirect_producer_later_in_plan_is_out_of_order(self):
+        # goal needs mid_done (from mid), mid needs ready (from prep). The plan has
+        # prep only after goal, so chaining goal would run prep twice.
+        r = CapabilityRegistry()
+        r.register(
+            Capability(name="prep", description="d", ros_action="a/p", postconditions=["ready"])
+        )
+        r.register(
+            Capability(
+                name="mid",
+                description="d",
+                ros_action="a/m",
+                preconditions=["ready"],
+                postconditions=["mid_done"],
+            )
+        )
+        r.register(
+            Capability(name="goal", description="d", ros_action="a/g", preconditions=["mid_done"])
+        )
+        engine = GroundingEngine(r, MockBackend(self._plan(("goal", {}), ("prep", {}))))
+        plan = engine.ground("do the goal")
+        assert plan.feasible is False
+        assert "'ready'" in plan.reason
+        assert "'prep' (step 2)" in plan.reason
+
     def test_infeasible_plan(self, registry):
         mock_response = json.dumps(
             {

@@ -410,6 +410,11 @@ chain = registry.resolve_chain("pick_up_object", current_state={"arm_is_free"})
 
 When `auto_chain=True` (the default) is set on `GroundingEngine`, this happens transparently every time you call `engine.ground()`.
 
+Inserted steps have no parameters from the LLM, so their optional parameters get their defaults. `ground()` returns an infeasible plan instead of inserting a step in two cases:
+
+- **The inserted step has a required parameter.** The reason names the step and the parameter. Only the LLM can supply the value, so the step has to be in its plan. This check runs even with `validate_params=False`.
+- **The LLM's plan runs the producer too late.** For example, `[pick_up_object, navigate]` when `pick_up_object` needs `robot_at_location`. The engine doesn't reorder the plan, because moving a step can change what the plan does.
+
 ---
 
 ## Integrating With Your Robot - Python

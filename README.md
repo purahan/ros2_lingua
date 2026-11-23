@@ -261,6 +261,17 @@ ros2 service call /lingua/ground \
     "{instruction: 'go to the table and pick up the bottle'}"
 ```
 
+To only offer the LLM capabilities with certain tags (untagged capabilities are always offered), pass `tag_filter`. An empty list means no filter. The filter is recorded in the plan, and replans use the same one.
+
+```bash
+ros2 service call /lingua/ground \
+    ros2_lingua_interfaces/srv/GroundInstruction \
+    "{instruction: 'go to the door', tag_filter: ['navigation']}"
+
+# The same from the CLI (--tag is repeatable)
+ros2 run ros2_lingua_mock cli ground --tag navigation "go to the door"
+```
+
 ---
 
 ## Capability Schema

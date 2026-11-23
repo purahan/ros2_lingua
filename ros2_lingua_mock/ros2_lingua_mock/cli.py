@@ -6,6 +6,7 @@ and for listing currently registered robot capabilities.
 
 Usage:
     ros2 run ros2_lingua_mock cli ground "go to the table and pick up the bottle"
+    ros2 run ros2_lingua_mock cli ground --tag navigation --tag speech "go to the door and say hi"
     ros2 run ros2_lingua_mock cli list-capabilities [--namespace NS] [--tag TAG]
 
 Prints the resulting plan in a human-readable format and shows
@@ -51,11 +52,13 @@ class LinguaCLI(Node):
         instruction: str,
         namespace: str = "",
         grounding_timeout: float = DEFAULT_GROUNDING_TIMEOUT,
+        tag_filter: list[str] | None = None,
     ) -> None:
         super().__init__("lingua_cli")
         if not math.isfinite(grounding_timeout) or grounding_timeout <= 0:
             raise ValueError("grounding_timeout must be a positive number of seconds")
         self._instruction = instruction
+        self._tag_filter = list(tag_filter or [])
         self._grounding_timeout = grounding_timeout
         self._done = False
 
@@ -70,7 +73,10 @@ class LinguaCLI(Node):
 
     def run(self) -> None:
         print(BANNER)
-        print(f'📢  Instruction: "{self._instruction}"\n')
+        print(f'📢  Instruction: "{self._instruction}"')
+        if self._tag_filter:
+            print(f"🏷️   Tags:        {', '.join(self._tag_filter)}")
+        print()
 
         if not self._client.wait_for_service(timeout_sec=5.0):
             print(f"❌  {self._service_name} service not found.")
@@ -80,6 +86,7 @@ class LinguaCLI(Node):
 
         request = GroundInstruction.Request()
         request.instruction = self._instruction
+        request.tag_filter = self._tag_filter
 
         print("⏳  Sending to grounding engine...")
         future = self._client.call_async(request)
@@ -228,6 +235,14 @@ def main() -> None:
         help="Maximum time to wait for the grounding service (default: 30 seconds)",
     )
     ground_parser.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        metavar="TAG",
+        help="Only offer the LLM capabilities with this tag (repeatable; "
+        "untagged capabilities are always offered)",
+    )
+    ground_parser.add_argument(
         "instruction",
         nargs="+",
         help="Natural language instruction to send to the robot",
@@ -266,7 +281,7 @@ def main() -> None:
         return
 
     if args.command != "ground" or not args.instruction:
-        print("Usage: cli ground <instruction>  |  cli list-capabilities [--tag TAG]")
+        print("Usage: cli ground [--tag TAG] <instruction>  |  cli list-capabilities [--tag TAG]")
         rclpy.try_shutdown()  # SIGINT may already have shut the context down
         return
 
@@ -276,6 +291,7 @@ def main() -> None:
         instruction,
         namespace=args.namespace,
         grounding_timeout=args.grounding_timeout,
+        tag_filter=args.tag,
     )
     try:
         cli.run()

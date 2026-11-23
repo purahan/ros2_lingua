@@ -95,18 +95,22 @@ class ActionPlan:
     original_instruction: The natural language instruction that was grounded
     feasible: False if the engine determined the plan cannot be executed
     reason: If not feasible, explains why
+    tag_filter: The tag filter the instruction was grounded with (None for no
+                filter), so a replan can use the same one
     """
 
     steps: list[ActionStep]
     original_instruction: str
     feasible: bool = True
     reason: str = ""
+    tag_filter: list[str] | None = None
 
     def to_dict(self) -> dict:
         return {
             "original_instruction": self.original_instruction,
             "feasible": self.feasible,
             "reason": self.reason,
+            "tag_filter": self.tag_filter,
             "steps": [s.to_dict() for s in self.steps],
         }
 
@@ -223,7 +227,13 @@ class GroundingEngine:
         Returns:
             ActionPlan with ordered steps ready for dispatch. Backend failures
             and exhausted malformed-JSON retries return an infeasible plan.
+            The plan's tag_filter records the filter it was grounded with.
         """
+        plan = self._ground(instruction, tag_filter)
+        plan.tag_filter = list(tag_filter) if tag_filter is not None else None
+        return plan
+
+    def _ground(self, instruction: str, tag_filter: list[str] | None) -> ActionPlan:
         if not self._registry.get_all():
             return ActionPlan(
                 steps=[],

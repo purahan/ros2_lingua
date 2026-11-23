@@ -46,7 +46,7 @@ def test_registry_services_run_while_grounding_is_blocked(monkeypatch) -> None:
     ground_started = threading.Event()
     release_ground = threading.Event()
 
-    def block_grounding(instruction: str) -> _InfeasiblePlan:
+    def block_grounding(instruction: str, tag_filter=None) -> _InfeasiblePlan:
         ground_started.set()
         release_ground.wait(5.0)
         return _InfeasiblePlan()

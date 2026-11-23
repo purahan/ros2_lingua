@@ -361,6 +361,32 @@ class TestCapabilityTagging:
         engine = GroundingEngine(registry, MockBackend(mock_response), auto_chain=False)
         plan = engine.ground("go to table", tag_filter=["locomotion"])
         assert plan.feasible
+        # The filter is recorded so a replan can use the same one (issue #43)
+        assert plan.tag_filter == ["locomotion"]
+        assert plan.to_dict()["tag_filter"] == ["locomotion"]
+
+    def test_plan_without_tag_filter_records_none(self, registry):
+        engine = GroundingEngine(registry, MockBackend('{"feasible": true, "steps": []}'))
+        plan = engine.ground("do nothing")
+        assert plan.tag_filter is None
+        assert plan.to_dict()["tag_filter"] is None
+
+    def test_infeasible_plan_records_tag_filter(self):
+        engine = GroundingEngine(CapabilityRegistry(), MockBackend("{}"))
+        plan = engine.ground("go", tag_filter=["locomotion"])
+        assert plan.feasible is False
+        assert plan.tag_filter == ["locomotion"]
+
+    def test_cached_plan_records_the_callers_tag_filter(self, registry):
+        response = '{"feasible": true, "steps": []}'
+        engine = GroundingEngine(registry, MockBackend(response), cache_ttl_sec=60.0)
+        tags = ["locomotion"]
+        first = engine.ground("wait", tag_filter=tags)
+        tags.append("mutated")  # the plan keeps its own copy
+        second = engine.ground("wait", tag_filter=["locomotion"])
+        assert first.tag_filter == ["locomotion"]
+        assert second.tag_filter == ["locomotion"]
+        assert engine.ground("wait").tag_filter is None
 
 
 class TestBackwardChaining:

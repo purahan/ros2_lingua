@@ -1,4 +1,7 @@
 string instruction
+# Only offer the LLM capabilities with at least one of these tags (untagged
+# capabilities are always offered). An empty list means no filter.
+string[] tag_filter
 ---
 bool success
 string plan_json

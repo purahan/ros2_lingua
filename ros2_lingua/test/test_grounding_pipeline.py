@@ -171,9 +171,10 @@ class TestHelperNode(Node):
         rclpy.spin_until_future_complete(self, future, timeout_sec=timeout)
         return future.result()
 
-    def ground(self, instruction: str, timeout=30.0):
+    def ground(self, instruction: str, timeout=30.0, tag_filter=None):
         req = GroundInstruction.Request()
         req.instruction = instruction
+        req.tag_filter = list(tag_filter or [])
         future = self._ground_client.call_async(req)
         rclpy.spin_until_future_complete(self, future, timeout_sec=timeout)
         return future.result()
@@ -375,6 +376,22 @@ class TestGroundingPipeline(unittest.TestCase):
             # The published plan carries a snapshot of the symbolic state (issue #35)
             published = json.loads(self.node._received_plans[-1])
             self.assertIn("plan_snapshot_token", published.get("state", []))
+
+    def test_13b_tag_filter_reaches_the_plan(self):
+        """
+        The request's tag_filter is passed to the engine and recorded in the
+        plan; an empty list means no filter (issue #43). The plan JSON is
+        returned whether or not the plan is feasible.
+        """
+        self.node.register_capability(SAY_CAPABILITY)
+
+        result = self.node.ground("say hello", tag_filter=["speech"])
+        self.assertIsNotNone(result)
+        self.assertEqual(json.loads(result.plan_json)["tag_filter"], ["speech"])
+
+        result = self.node.ground("say hello")
+        self.assertIsNotNone(result)
+        self.assertIsNone(json.loads(result.plan_json)["tag_filter"])
 
     # ── Robustness ────────────────────────────────────────────────
 

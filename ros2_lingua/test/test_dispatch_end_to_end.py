@@ -159,6 +159,7 @@ class E2EClient(Node):
         self._lock = threading.Lock()
         self._statuses = []
         self._capability_names = set()
+        self._published_plans = []
 
         self.ground_client = self.create_client(GroundInstruction, "/lingua/ground")
         self.register_client = self.create_client(RegisterCapability, "/lingua/register_capability")
@@ -166,6 +167,7 @@ class E2EClient(Node):
             ExecutionStatus, "/lingua/execution_status", self._handle_status, 10
         )
         self.create_subscription(String, "/lingua/capabilities", self._handle_caps, 10)
+        self.create_subscription(String, "/lingua/current_plan", self._handle_plan, 10)
 
     def _handle_status(self, msg):
         with self._lock:
@@ -174,6 +176,24 @@ class E2EClient(Node):
     def _handle_caps(self, msg):
         with self._lock:
             self._capability_names = {c["name"] for c in json.loads(msg.data)}
+
+    def _handle_plan(self, msg):
+        with self._lock:
+            self._published_plans.append(json.loads(msg.data))
+
+    def wait_for_published_plan(self, since, timeout):
+        """Return the first plan published after index `since`, or None."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            with self._lock:
+                if len(self._published_plans) > since:
+                    return self._published_plans[since]
+            time.sleep(0.05)
+        return None
+
+    def plan_count(self):
+        with self._lock:
+            return len(self._published_plans)
 
     def status_count(self):
         with self._lock:
@@ -248,11 +268,12 @@ class TestDispatchEndToEnd(unittest.TestCase):
             cls.robot.destroy_node()
         rclpy.shutdown()
 
-    def _ground_and_wait(self, timeout=30.0):
+    def _ground_and_wait(self, timeout=30.0, tag_filter=None):
         """Ground INSTRUCTION, wait for the resulting run to finish, return (step names, status)."""
         since = self.client.status_count()
         request = GroundInstruction.Request()
         request.instruction = INSTRUCTION
+        request.tag_filter = list(tag_filter or [])
         result = _wait_for_future(self.client.ground_client.call_async(request), 10.0)
         self.assertIsNotNone(result, "lingua/ground did not respond")
         self.assertTrue(result.success, f"grounding failed: {result.message}")
@@ -284,10 +305,18 @@ class TestDispatchEndToEnd(unittest.TestCase):
         )
 
         # e2e_ready is now in the state, so the chainer no longer inserts e2e_prepare
-        steps, status = self._ground_and_wait()
+        plans_before = self.client.plan_count()
+        steps, status = self._ground_and_wait(tag_filter=["test"])
         self.assertEqual(steps, ["e2e_fetch"])
         self.assertEqual(status, "COMPLETED")
         self.assertEqual(self.robot.calls[-1], ("e2e_fetch", {"object_name": "cup"}))
+
+        # The plan the dispatcher received carries the tag filter (issue #43)
+        # and a snapshot of the state it was grounded in (issue #35)
+        published = self.client.wait_for_published_plan(plans_before, 5.0)
+        self.assertIsNotNone(published, "no plan was published on /lingua/current_plan")
+        self.assertEqual(published["tag_filter"], ["test"])
+        self.assertIn("e2e_ready", published["state"])
 
 
 @launch_testing.post_shutdown_test()

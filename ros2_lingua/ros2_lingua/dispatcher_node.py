@@ -262,7 +262,13 @@ class DispatcherNode(Node):
     def _execute_plan(self, plan_data: dict):
         steps = plan_data.get("steps", [])
         instruction = plan_data.get("original_instruction", "")
+        # Replans use the same tag filter as the original grounding call
         tag_filter = plan_data.get("tag_filter")
+        if tag_filter is not None and (
+            not isinstance(tag_filter, list) or not all(isinstance(t, str) for t in tag_filter)
+        ):
+            self.get_logger().warn("Plan has an invalid 'tag_filter'; replanning without one.")
+            tag_filter = None
         total = len(steps)
 
         self.get_logger().info(f"Executing plan: '{instruction}' ({total} steps)")

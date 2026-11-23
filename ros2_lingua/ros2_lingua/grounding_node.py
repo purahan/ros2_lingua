@@ -158,10 +158,13 @@ class GroundingNode(Node):
     def _handle_ground(self, request, response):
         """Ground a natural language instruction into an ActionPlan."""
         instruction = request.instruction
-        self.get_logger().info(f"Grounding instruction: '{instruction}'")
+        # An empty list means no filter (an empty filter would hide every tagged capability)
+        tag_filter = list(request.tag_filter) or None
+        filter_note = f" (tag_filter={tag_filter})" if tag_filter else ""
+        self.get_logger().info(f"Grounding instruction: '{instruction}'{filter_note}")
 
         try:
-            plan = self._engine.ground(instruction)
+            plan = self._engine.ground(instruction, tag_filter=tag_filter)
             plan_json = plan.to_json()
 
             response.success = plan.feasible
